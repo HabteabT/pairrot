@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pairrot dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">IKT457</p>
+      <h1>Pairrot dashboard</h1>
+      <p id="updated">Checking the project status...</p>
+    </div>
+    <button id="refresh" type="button">Refresh</button>
+  </header>
+
+  <section id="stages" class="stages" aria-live="polite"></section>
+
+  <section>
+    <div class="section-head">
+      <h2>Pairs</h2>
+      <div class="split-buttons" id="splits">
+        <button type="button" data-split="train">Train</button>
+        <button type="button" data-split="val">Validation</button>
+        <button type="button" data-split="test">Test</button>
+      </div>
+    </div>
+    <p id="dataset-summary"></p>
+    <div id="words"></div>
+    <div id="pairs"></div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>
