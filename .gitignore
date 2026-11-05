@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Pairrot generated data
+/.cache/
+/artifacts/
