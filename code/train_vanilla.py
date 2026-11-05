@@ -161,10 +161,10 @@ def clause_summary(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train the vanilla Tsetlin Machine on prepared pairs.")
     parser.add_argument("--data", type=Path, default=DEFAULT_DATA)
-    parser.add_argument("--clauses", type=int, default=20)
-    parser.add_argument("--T", type=int, default=10)
+    parser.add_argument("--clauses", type=int, default=200)
+    parser.add_argument("--T", type=int, default=50)
     parser.add_argument("--s", type=float, default=1.0)
-    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--state-bits", type=int, default=8)
     parser.add_argument("--seed", type=int, default=457)
     return parser.parse_args()

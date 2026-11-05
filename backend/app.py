@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import json
 import shutil
+import sys
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -19,18 +20,23 @@ REPO = Path(__file__).resolve().parents[1]
 PREPARED = REPO / "dataset" / "prepared"
 MODEL_STATUS = REPO / "code" / "results" / "vanilla_status.json"
 FRONTEND = REPO / "frontend"
+CODE = REPO / "code"
+_MEASURED: dict[str, str] = {}
 HOST = "127.0.0.1"
 PORT = 8000
+FIGURE = CODE / "results" / "knows_when.png"
 PAGES = {
     "/": FRONTEND / "index.html",
     "/index.html": FRONTEND / "index.html",
     "/app.js": FRONTEND / "app.js",
     "/styles.css": FRONTEND / "styles.css",
+    "/knows_when.png": FIGURE,
 }
 PAGE_TYPES = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
     ".css": "text/css; charset=utf-8",
+    ".png": "image/png",
 }
 
 
@@ -114,6 +120,24 @@ def hierarchical_stage() -> dict[str, str]:
     }
 
 
+def run_output() -> str:
+    """Score the saved machine once, then reuse that printout until the files change."""
+
+    state_path = CODE / "results" / "vanilla_state.npz"
+    data_dir = latest_prepared_dir()
+    if data_dir is None or not state_path.exists():
+        return "No saved model yet. Double-click train.bat, then refresh this page."
+    stamp = f"{state_path.stat().st_mtime}:{data_dir.stat().st_mtime}"
+    if _MEASURED.get("stamp") != stamp:
+        if str(CODE) not in sys.path:
+            sys.path.insert(0, str(CODE))
+        from measure import measure
+
+        _MEASURED["stamp"] = stamp
+        _MEASURED["text"] = measure(data_dir, CODE / "results")
+    return _MEASURED["text"]
+
+
 def dashboard_payload(split: str, limit: int) -> dict:
     dataset = dataset_payload(limit, split)
     vanilla = model_payload()
@@ -134,6 +158,7 @@ def dashboard_payload(split: str, limit: int) -> dict:
         ],
         "dataset": dataset,
         "vanilla": vanilla,
+        "run_output": run_output(),
     }
 
 

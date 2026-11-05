@@ -60,6 +60,13 @@ button.active {
   border-color: #1c1915;
 }
 
+#knows-when {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  border-radius: 8px;
+}
+
 .stages {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -131,6 +138,24 @@ th, td {
 .same { color: #1f6b3a; }
 .different { color: #8a3b12; }
 .error { color: #8a1f1f; }
+
+.source {
+  margin-bottom: 12px;
+  color: #5c5346;
+}
+
+#run-output {
+  margin: 0;
+  background: #1c1915;
+  color: #f6f3ec;
+  border-radius: 8px;
+  padding: 16px;
+  overflow: auto;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
 
 @media (max-width: 800px) {
   header, .section-head, .stages { display: block; }

@@ -19,6 +19,18 @@
   <section id="stages" class="stages" aria-live="polite"></section>
 
   <section>
+    <h2>A Tsetlin machine knows when it does not know</h2>
+    <p class="source">Two moons drawn with binary threshold features. Teal means both clause votes are zero, so the Tsetlin machine abstains. The neural network still paints a class there. This picture is an illustration. It is not the 20 Newsgroups pair model, which stays at s = 1.0.</p>
+    <img id="knows-when" src="/knows_when.png" alt="Tsetlin machine abstains in the gap between two moons. The neural network fills that gap.">
+  </section>
+
+  <section>
+    <h2>Model output</h2>
+    <p class="source">This block is the scoring run. It predicts with the saved automata on the feature files.</p>
+    <pre id="run-output">Waiting for the model...</pre>
+  </section>
+
+  <section>
     <div class="section-head">
       <h2>Pairs</h2>
       <div class="split-buttons" id="splits">

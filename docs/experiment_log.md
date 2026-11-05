@@ -23,3 +23,10 @@ The guidance for that habit comes from Martin A. Schwartz, "The importance of st
 - What happened: the illustrative one-bit problem reached training accuracy 1.000. Newsgroups training accuracy finished at 0.540 and validation accuracy at 0.515. The validation confusion matrix was `[[88, 12], [85, 15]]`. Only two automata reached Include, both for `these present in Post B`. No negated literal remained. A later read of the saved state, not a new fit, found 173 of 200 validation votes tied at 0. All 27 class-1 predictions had scores `(0, 2)` and the Post B bit for "these" set. 43,922 automata were at state 0.
 - What we learned: the same update learns a one-bit pattern and, on these 2,000-bit posts, mostly writes clauses and then erases them. The accuracy sits near chance because ties become class 0. The only surviving rule is a function word. The next vanilla question, still at s = 1.0, is whether more clauses or more epochs leave any other literal. The test set stays unread until that choice is made on validation.
 - Command: `.\.venv\Scripts\python code\train_vanilla.py --data dataset\prepared\s457_f1000_t1000_v200_e200_val0p2`
+
+### 2026-11-05 — Does a larger s=1.0 machine learn more than the 20-clause pilot?
+
+- Question: if we give the same pairs more clauses and more epochs, still at s = 1.0, does validation accuracy move above the first pilot?
+- What changed: 200 clauses per class, T = 50, 50 epochs. Same pairs, same vocabulary, same seed. The test pairs were still not loaded.
+- What happened: training accuracy reached 0.578 at epoch 41, then the last epoch fell to 0.509. Validation accuracy finished at 0.500. The confusion matrix was `[[100, 0], [100, 0]]`, so every validation pair was predicted as a different category. The saved clauses contain 1,178 included literals and only 10 negations. Some class-1 clauses name topical words such as "crime" and "court", but their votes did not win.
+- What we learned: more training at s = 1.0 wrote many more literals and still did not separate the two pair types. The final model is a constant "different category" rule. A longer run is not, by itself, a better run. The test set stays unread.

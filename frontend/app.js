@@ -88,8 +88,9 @@ async function load() {
   try {
     const response = await fetch(`${API}/api/dashboard?split=${currentSplit}&limit=6`);
     const payload = await response.json();
-    updated.textContent = `Updated ${payload.updated_at.replace("T", " ")}. This page reads the backend only.`;
+    updated.textContent = `Updated ${payload.updated_at.replace("T", " ")}.`;
     renderStages(payload.stages);
+    document.querySelector("#run-output").textContent = payload.run_output;
     renderDataset(payload.dataset);
   } catch (error) {
     updated.textContent = "The dashboard is not running. Double-click start.bat in the Pairrot folder.";
