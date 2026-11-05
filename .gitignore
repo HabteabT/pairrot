@@ -218,3 +218,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Pairrot: local environments, dataset caches, and generated experiment files
+.venv/
+venv/
+dataset/cache/
+dataset/prepared/
+code/results/
+data/
+outputs/
+_course_extract/
