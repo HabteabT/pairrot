@@ -1,0 +1,139 @@
+:root {
+  color: #1c1915;
+  background: #f4f1ea;
+  font-family: "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0 auto;
+  max-width: 1040px;
+  padding: 28px 20px 64px;
+}
+
+header, section {
+  background: #fffdf8;
+  border: 1px solid #e4dccb;
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+section {
+  margin-top: 16px;
+}
+
+h1, h2 {
+  font-weight: 650;
+  margin: 0 0 8px;
+}
+
+p {
+  line-height: 1.45;
+  margin: 0;
+}
+
+.eyebrow {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+button {
+  border: 1px solid #cfc3ad;
+  background: #fff;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+button.active {
+  background: #1c1915;
+  color: #fffdf8;
+  border-color: #1c1915;
+}
+
+.stages {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.card {
+  background: #fffdf8;
+  border: 1px solid #e4dccb;
+  border-top: 6px solid #b9a88a;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.card.ready { border-top-color: #2f7d4a; }
+.card.waiting { border-top-color: #b5811b; }
+.card.blocked { border-top-color: #9a3b2f; }
+
+.pill {
+  display: inline-block;
+  margin: 8px 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.section-head, .split-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.split-buttons {
+  justify-content: flex-end;
+}
+
+#words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.chip {
+  background: #f3eee4;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th, td {
+  text-align: left;
+  vertical-align: top;
+  border-top: 1px solid #e4dccb;
+  padding: 8px 6px;
+  white-space: pre-line;
+}
+
+.same { color: #1f6b3a; }
+.different { color: #8a3b12; }
+.error { color: #8a1f1f; }
+
+@media (max-width: 800px) {
+  header, .section-head, .stages { display: block; }
+  .split-buttons { margin-top: 12px; }
+  .card { margin-top: 12px; }
+}
