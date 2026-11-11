@@ -25,6 +25,12 @@
   </section>
 
   <section>
+    <h2>Automaton states</h2>
+    <p class="source">One bar for each state of the saved vanilla model, s = 1.0. Teal is still Exclude. Gold is Include, which starts at state 128. The vertical axis is a log scale, so that short Include bar stays visible.</p>
+    <img id="state-histogram" src="/state_histogram.png" alt="Histogram of automaton states. Most automata are at state 0. A short gold bar at state 128 is Include.">
+  </section>
+
+  <section>
     <h2>Model output</h2>
     <p class="source">This block is the scoring run. It predicts with the saved automata on the feature files.</p>
     <pre id="run-output">Waiting for the model...</pre>

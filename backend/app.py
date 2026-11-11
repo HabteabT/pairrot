@@ -25,12 +25,14 @@ _MEASURED: dict[str, str] = {}
 HOST = "127.0.0.1"
 PORT = 8000
 FIGURE = CODE / "results" / "knows_when.png"
+HISTOGRAM = CODE / "results" / "state_histogram.png"
 PAGES = {
     "/": FRONTEND / "index.html",
     "/index.html": FRONTEND / "index.html",
     "/app.js": FRONTEND / "app.js",
     "/styles.css": FRONTEND / "styles.css",
     "/knows_when.png": FIGURE,
+    "/state_histogram.png": HISTOGRAM,
 }
 PAGE_TYPES = {
     ".html": "text/html; charset=utf-8",
