@@ -122,3 +122,11 @@ The guidance for that habit comes from Martin A. Schwartz, "The importance of st
 - Settings: identical to the best run (300 topical words, full posts, 30,000 pairs, 800 clauses per class, T = 50, s = 1.0, 8 epochs, seed 457), with boost 0. Pairs were visited in a shuffled order.
 - What happened: training accuracy 0.515, validation 0.499, check 0.490. The model held 15 included literals after 8 epochs. The matching boost 1 run in shuffled order scored 0.744 on validation and 0.742 on check.
 - What we learned: with everything else at its best setting, boost 0 stays at chance. The vocabulary, the full posts, and the pair count only matter once Type I is allowed to include true literals.
+
+### 2026-11-12 — How much does the best setup depend on the random split and seed?
+
+- Question: the project machine reached 0.692 with the settings that gave 0.759 on the development copy. Is a gap of that size inside the spread between random splits?
+- Where this ran: the development copy of the official training posts. No test posts.
+- What changed: the document split, the pair sampling, and the model were all seeded with 11 and then with 23, instead of 457. Everything else is the best setup: 300 topical words, full posts, 30,000 pairs, 800 clauses per class, T = 50, s = 1.0, boost 1, 8 epochs, shuffled pair order.
+- What happened: seed 11 reached validation 0.694 after one epoch and finished at 0.747 (check 0.755). Seed 23 predicted "same category" for every pair for seven epochs, with validation at 0.500, and then moved to 0.631 (check 0.618) in the eighth.
+- What we learned: the setup is sensitive to the seed. Some runs start learning at once and some sit on a constant answer for several epochs first, so a run stopped at 8 epochs can land anywhere between about 0.63 and 0.76. One seed is not enough to report. The final number should be the mean and range over several seeds, and the epoch count should be large enough for a late starter to catch up.
