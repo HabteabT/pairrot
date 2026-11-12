@@ -83,23 +83,75 @@ function markSplit() {
   }
 }
 
+// Figures are written by the scripts in code/. Until they exist, show a line
+// that says how to make them instead of a broken-image icon.
+const FIGURES = [
+  { id: "knows-when", src: "/knows_when.png", command: "python code/knows_when.py" },
+  { id: "state-histogram", src: "/state_histogram.png", command: "train.bat" },
+];
+
+function refreshFigures() {
+  for (const figure of FIGURES) {
+    const image = document.querySelector(`#${figure.id}`);
+    let note = image.nextElementSibling;
+    if (!note || !note.classList.contains("missing")) {
+      note = document.createElement("p");
+      note.className = "missing";
+      note.textContent = `This figure has not been drawn yet. Run ${figure.command}, then refresh.`;
+      note.hidden = true;
+      image.after(note);
+    }
+    image.onload = () => {
+      image.hidden = false;
+      note.hidden = true;
+    };
+    image.onerror = () => {
+      image.hidden = true;
+      note.hidden = false;
+    };
+    // The time stamp makes the browser ask again after a new training run.
+    image.src = `${figure.src}?t=${Date.now()}`;
+  }
+}
+
+let latestRequest = 0;
+
 async function load() {
   const updated = document.querySelector("#updated");
+  // Only the newest request may draw. A slow answer for a split the reader
+  // has already left must not overwrite the page.
+  const request = ++latestRequest;
+  const split = currentSplit;
   try {
-    const response = await fetch(`${API}/api/dashboard?split=${currentSplit}&limit=6`);
+    const response = await fetch(`${API}/api/dashboard?split=${split}&limit=6`);
     const payload = await response.json();
+    if (request !== latestRequest) {
+      return;
+    }
+    if (!response.ok) {
+      updated.textContent = `The backend reported a problem: ${payload.error || response.status}`;
+      updated.className = "error";
+      return;
+    }
+    updated.className = "";
     updated.textContent = `Updated ${payload.updated_at.replace("T", " ")}.`;
     renderStages(payload.stages);
     document.querySelector("#run-output").textContent = payload.run_output;
     renderDataset(payload.dataset);
   } catch (error) {
+    if (request !== latestRequest) {
+      return;
+    }
     updated.textContent = "The dashboard is not running. Double-click start.bat in the Pairrot folder.";
     updated.className = "error";
     document.querySelector("#stages").replaceChildren();
   }
 }
 
-document.querySelector("#refresh").addEventListener("click", load);
+document.querySelector("#refresh").addEventListener("click", () => {
+  refreshFigures();
+  load();
+});
 for (const button of document.querySelectorAll("#splits button")) {
   button.addEventListener("click", () => {
     currentSplit = button.dataset.split;
@@ -109,5 +161,6 @@ for (const button of document.querySelectorAll("#splits button")) {
 }
 
 markSplit();
+refreshFigures();
 load();
 setInterval(load, 8000);

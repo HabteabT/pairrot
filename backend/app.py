@@ -126,18 +126,25 @@ def run_output() -> str:
     """Score the saved machine once, then reuse that printout until the files change."""
 
     state_path = CODE / "results" / "vanilla_state.npz"
-    data_dir = latest_prepared_dir()
-    if data_dir is None or not state_path.exists():
+    if not state_path.exists():
         return "No saved model yet. Double-click train.bat, then refresh this page."
-    stamp = f"{state_path.stat().st_mtime}:{data_dir.stat().st_mtime}"
-    if _MEASURED.get("stamp") != stamp:
-        if str(CODE) not in sys.path:
-            sys.path.insert(0, str(CODE))
-        from measure import measure
+    if str(CODE) not in sys.path:
+        sys.path.insert(0, str(CODE))
+    try:
+        from measure import measure, trained_data_dir
 
-        _MEASURED["stamp"] = stamp
-        _MEASURED["text"] = measure(data_dir, CODE / "results")
-    return _MEASURED["text"]
+        # Score on the dataset the model was trained on. The newest prepared
+        # folder is only a fallback, because its vocabulary can be different.
+        data_dir = trained_data_dir(CODE / "results") or latest_prepared_dir()
+        if data_dir is None:
+            return "A saved model exists, but no prepared dataset was found. Run dataset/prepare_data.py."
+        stamp = f"{state_path.stat().st_mtime}:{data_dir}:{data_dir.stat().st_mtime}"
+        if _MEASURED.get("stamp") != stamp:
+            _MEASURED["text"] = measure(data_dir, CODE / "results")
+            _MEASURED["stamp"] = stamp
+        return _MEASURED["text"]
+    except Exception as error:  # The page should say what went wrong, not go blank.
+        return f"Could not score the saved model: {type(error).__name__}: {error}"
 
 
 def dashboard_payload(split: str, limit: int) -> dict:
@@ -203,6 +210,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._send({"error": "Not found"}, status=404)
         except FileNotFoundError:
             self._send({"error": f"No pairs found for split {split}."}, status=404)
+        except Exception as error:
+            # A half-written or damaged results file should not drop the connection.
+            self._send({"error": f"{type(error).__name__}: {error}"}, status=500)
 
     def _send_page(self, path: str) -> None:
         page = PAGES.get(path)
@@ -212,6 +222,8 @@ class Handler(BaseHTTPRequestHandler):
         body = page.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", PAGE_TYPES[page.suffix])
+        # The figures are redrawn after every training run, so never reuse an old copy.
+        self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -230,7 +242,13 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    try:
+        server = ThreadingHTTPServer((HOST, PORT), Handler)
+    except OSError as error:
+        raise SystemExit(
+            f"Could not start on http://{HOST}:{PORT} ({error}). "
+            "The dashboard is probably already running in another window. Close it and try again."
+        )
     print(f"Open the dashboard at http://{HOST}:{PORT}")
     server.serve_forever()
 

@@ -30,3 +30,28 @@ The guidance for that habit comes from Martin A. Schwartz, "The importance of st
 - What changed: 200 clauses per class, T = 50, 50 epochs. Same pairs, same vocabulary, same seed. The test pairs were still not loaded.
 - What happened: training accuracy reached 0.578 at epoch 41, then the last epoch fell to 0.509. Validation accuracy finished at 0.500. The confusion matrix was `[[100, 0], [100, 0]]`, so every validation pair was predicted as a different category. The saved clauses contain 1,178 included literals and only 10 negations. Some class-1 clauses name topical words such as "crime" and "court", but their votes did not win.
 - What we learned: more training at s = 1.0 wrote many more literals and still did not separate the two pair types. The final model is a constant "different category" rule. A longer run is not, by itself, a better run. The test set stays unread.
+
+### 2026-11-12 — Is the near-chance accuracy a bug, a setting, or the task?
+
+- Question: the two earlier runs sat at 0.515 and 0.500. Is the update code wrong, is `boost_true_positive_feedback = 0` the cause, or can a flat machine not learn "same category" from two word blocks?
+- Where this ran: **not on the project machine and not on the prepared dataset.** It ran in a cloud workspace that could not download the by-date archive. The posts came from a JSON copy of the 11,314 official training posts (`selva86/datasets/newsgroups.json` on GitHub), cleaned with scikit-learn's own header, footer, and quote functions and split with the same seed. That gave 9,051 training and 2,263 validation posts, the same counts as the first run. The pairs are not the same pairs. No test posts were available, so none were read. These numbers are a development check. They should be repeated here before any of them goes into the report.
+- What changed in the code: `code/vanilla_tsetlin.py` computes the clause output once per update and predicts with one matrix product. On the same seed the automaton states and predictions are identical to the old code, and training is about three times faster. `--boost 1` is a new option in `code/train_vanilla.py`. The default is still 0.
+- Settings: s = 1.0 unless stated, 200 clauses per class, T = 50, seed 457. Validation used 2,000 pairs, because 200 pairs give a standard error of about 0.035 and cannot separate 0.515 from 0.500.
+- What happened:
+
+| Run | Training pairs | Train accuracy | Validation accuracy |
+| --- | ---: | ---: | ---: |
+| First pilot repeated: 20 clauses, T = 10, 10 epochs, 200 validation pairs | 1,000 | 0.538 | 0.515 |
+| boost 0, 30 epochs | 1,000 | 0.546 | 0.492 |
+| boost 1, 30 epochs | 1,000 | 0.990 | 0.489 |
+| boost 0, 8 epochs | 10,000 | 0.534 | 0.521 |
+| boost 1, 8 epochs | 10,000 | 0.730 | 0.512 |
+| boost 1, 8 epochs, words in more than 10% of posts removed | 10,000 | 0.745 | 0.517 |
+| the same, at most 32 literals per clause | 10,000 | 0.711 | 0.505 |
+| diagnostic, s = 3, boost 1, 6 epochs (not an assignment setting) | 10,000 | 0.570 | 0.506 |
+| diagnostic, s = 10, boost 1, 6 epochs (not an assignment setting) | 10,000 | 0.571 | 0.510 |
+
+  With boost 1 the machine kept about 27,000 literals after 1,000 pairs, and all but a handful were negated. With boost 0 it kept 13. Two reference models that are not Tsetlin Machines were fit on 10,000 to 20,000 pairs: logistic regression on the raw Post A and Post B blocks reached 0.513 on validation, and logistic regression on "the same word is in both posts" reached 0.55 to 0.60 for every vocabulary tried (top 1,000 or 5,000 words, with or without the most frequent words).
+- What we learned: the update code is not the cause. It reproduces the first pilot exactly, and with boost 1 it fits the training pairs almost perfectly. The boost flag decides whether the machine can memorise, not whether it generalises: boost 1 at s = 1.0 learns each training pair by listing absent words, which is reasoning by elimination, and that list does not transfer to new pairs. Ten times more pairs, a vocabulary without function words, a clause-size limit, and ordinary s values all stayed within about two standard errors of 0.500. The label depends only on how Post A and Post B relate, so no single word in one block carries any signal, and a flat conjunction has to find the right word pair among a million. Even the reference that is handed the "same word in both posts" feature stops near 0.60. A vanilla accuracy near 0.5 is therefore the measured answer for this encoding, not a defect to tune away. The comparison with the hierarchical model is where a difference should appear.
+- Open point for the report: tmu and pyTsetlinMachine default to boost 1. The report explains why the pilot uses 0. Both readings of s = 1.0 give the same validation accuracy here, and they give very different clauses, which is worth showing.
+- Commands: `python code/train_vanilla.py --boost 1`, and `python dataset/prepare_data.py --val-pairs 2000 --train-pairs 10000` for the larger pair sets.
