@@ -46,8 +46,11 @@ from importlib.metadata import version
 from pathlib import Path
 
 import numpy as np
+from scipy import sparse
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.datasets._twenty_newsgroups import ARCHIVE
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+from sklearn.feature_selection import chi2
 from sklearn.model_selection import train_test_split
 
 
@@ -207,15 +210,24 @@ def ensure_newsgroups_archive(data_home: Path) -> dict[str, str]:
     )
 
 
-def load_official_subset(subset: str, data_home: Path) -> tuple[list[Document], list[str]]:
-    """Load one official 20 Newsgroups subset, with headers, footers, and quotes removed."""
+def load_official_subset(
+    subset: str,
+    data_home: Path,
+    full_text: bool = False,
+) -> tuple[list[Document], list[str]]:
+    """Load one official 20 Newsgroups subset.
+
+    Headers, footers, and quotes are removed unless ``full_text`` is set. The
+    course brief does not ask for the removal. It is this project's stricter
+    default, and ``--full-text`` keeps the posts as distributed.
+    """
 
     bunch = fetch_20newsgroups(
         data_home=str(data_home),
         subset=subset,
         categories=None,
         shuffle=False,
-        remove=("headers", "footers", "quotes"),
+        remove=() if full_text else ("headers", "footers", "quotes"),
         download_if_missing=True,
     )
     origin = "official_train" if subset == "train" else "official_test"
@@ -281,6 +293,66 @@ def select_vocabulary(documents: list[Document], max_features: int) -> tuple[lis
     words = [word for word, _ in chosen]
     document_frequency = [count for _, count in chosen]
     return words, document_frequency
+
+
+TOPICAL_MIN_DOCUMENTS = 5
+
+
+def select_topical_vocabulary(documents: list[Document], max_features: int) -> tuple[list[str], list[int]]:
+    """Choose the words that best tell the categories apart, from training posts only.
+
+    Each candidate word is scored with the chi-square statistic between its
+    presence in a post and the post's category. English stop words and words
+    in fewer than five training posts are not candidates. The categories are
+    used here to choose which words become features. They are still not
+    features, and validation and test posts are not looked at.
+    """
+
+    if max_features < 1:
+        raise RuntimeError(f"The vocabulary limit must be at least 1. Got {max_features}.")
+    frequencies: Counter[str] = Counter()
+    for document in documents:
+        frequencies.update(document.tokens)
+    candidates = sorted(
+        word
+        for word, count in frequencies.items()
+        if count >= TOPICAL_MIN_DOCUMENTS and word not in ENGLISH_STOP_WORDS
+    )
+    if len(candidates) < max_features:
+        raise RuntimeError(
+            f"Impossible vocabulary request: only {len(candidates)} candidate words remain, "
+            f"which is fewer than the requested limit of {max_features}."
+        )
+    column = {word: index for index, word in enumerate(candidates)}
+    rows: list[int] = []
+    columns: list[int] = []
+    for row, document in enumerate(documents):
+        for token in document.tokens:
+            index = column.get(token)
+            if index is not None:
+                rows.append(row)
+                columns.append(index)
+    # Sparse, because most words are absent from most posts.
+    presence = sparse.csr_matrix(
+        (np.ones(len(rows), dtype=np.float64), (rows, columns)),
+        shape=(len(documents), len(candidates)),
+    )
+    category_names = sorted({document.category for document in documents})
+    labels = np.array([category_names.index(document.category) for document in documents])
+    scores = chi2(presence, labels)[0]
+    # Highest score first. Candidates are alphabetical, so a stable sort breaks ties by word.
+    chosen = np.argsort(-scores, kind="stable")[:max_features]
+    words = [candidates[int(index)] for index in chosen]
+    return words, [frequencies[word] for word in words]
+
+
+VOCABULARY_RULES = {
+    "frequency": "highest document frequency on training posts only; ties broken alphabetically",
+    "topical": (
+        "highest chi-square score between word presence and category on training posts only; "
+        "English stop words and words in fewer than 5 training posts excluded; ties broken alphabetically"
+    ),
+}
 
 
 def _maximum_unordered_pairs(n_documents: int) -> int:
@@ -663,6 +735,10 @@ def output_directory(args: argparse.Namespace) -> Path:
         f"s{args.seed}_f{args.max_features}_t{args.train_pairs}"
         f"_v{args.val_pairs}_e{args.test_pairs}_val{fraction}"
     )
+    if args.full_text:
+        name += "_fulltext"
+    if args.vocabulary != "frequency":
+        name += f"_{args.vocabulary}"
     return ROOT / "prepared" / name
 
 
@@ -676,6 +752,7 @@ def save_prepared_data(
     features_by_split: dict[str, np.ndarray],
     targets_by_split: dict[str, np.ndarray],
     preview: str,
+    vocabulary_rule: str = "frequency",
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "settings.json").write_text(json.dumps(settings, indent=2), encoding="utf-8")
@@ -684,14 +761,11 @@ def save_prepared_data(
             {
                 "words": vocabulary,
                 "document_frequency": document_frequency,
-                "selection": (
-                    "highest document frequency on training posts only; "
-                    "ties broken alphabetically"
-                ),
+                "selection": VOCABULARY_RULES[vocabulary_rule],
                 "token_pattern": TOKEN_PATTERN.pattern,
                 "lowercase": True,
                 "minimum_token_length": 2,
-                "stopwords_removed": False,
+                "stopwords_removed": vocabulary_rule == "topical",
                 "stemming": False,
             },
             indent=2,
@@ -777,12 +851,22 @@ def build_settings(
         "output_dir": str(output_dir),
         "assignment_requirements": ASSIGNMENT_REQUIREMENTS,
         "experiment_choices": {
+            "post_text": (
+                "full posts as distributed, headers, footers, and quotes kept"
+                if args.full_text
+                else "headers, footers, and quotes removed by the loader"
+            ),
             "validation_fraction": args.val_fraction,
             "validation_split": "stratified by category, using scikit-learn train_test_split",
             "max_features": args.max_features,
-            "vocabulary_ranking": "document frequency on training posts, alphabetical tie break",
+            "vocabulary_ranking": VOCABULARY_RULES[args.vocabulary],
+            "categories_used_for": (
+                "building Y and choosing the vocabulary on training posts"
+                if args.vocabulary == "topical"
+                else "building Y only"
+            ),
             "tokenization": "lowercase alphabetic tokens with length at least 2",
-            "stopwords_removed": False,
+            "stopwords_removed": args.vocabulary == "topical",
             "stemming": False,
             "empty_posts": "kept",
             "pair_balance": "exactly half Y=1 and half Y=0",
@@ -833,6 +917,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--preview-per-class", type=int, default=2)
     parser.add_argument("--output", type=str, default="")
     parser.add_argument(
+        "--vocabulary",
+        choices=("frequency", "topical"),
+        default="frequency",
+        help=(
+            "frequency: the most common words. topical: the words that best separate "
+            "the categories on the training posts (chi-square), without stop words."
+        ),
+    )
+    parser.add_argument(
+        "--full-text",
+        action="store_true",
+        help="Keep headers, footers, and quoted text. The default removes them.",
+    )
+    parser.add_argument(
         "--data-home",
         type=str,
         default=str(ROOT / "cache"),
@@ -852,8 +950,8 @@ def main() -> None:
     archive_info = ensure_newsgroups_archive(data_home)
     print(f"Dataset archive: {archive_info}")
     print("Loading the official 20 Newsgroups training and test posts...")
-    official_train, train_categories = load_official_subset("train", data_home)
-    official_test, test_categories = load_official_subset("test", data_home)
+    official_train, train_categories = load_official_subset("train", data_home, args.full_text)
+    official_test, test_categories = load_official_subset("test", data_home, args.full_text)
     if train_categories != test_categories:
         raise RuntimeError("The official train and test subsets do not use the same categories.")
     category_names = train_categories
@@ -882,9 +980,12 @@ def main() -> None:
         + ", ".join(f"{split}={len(documents)}" for split, documents in splits.items())
     )
 
-    vocabulary, document_frequency = select_vocabulary(train_documents, args.max_features)
+    if args.vocabulary == "topical":
+        vocabulary, document_frequency = select_topical_vocabulary(train_documents, args.max_features)
+    else:
+        vocabulary, document_frequency = select_vocabulary(train_documents, args.max_features)
     word_index = {word: index for index, word in enumerate(vocabulary)}
-    print("First 15 training vocabulary words, with document frequency:")
+    print(f"First 15 training vocabulary words ({args.vocabulary}), with document frequency:")
     for word, count in list(zip(vocabulary, document_frequency))[:15]:
         print(f"  {word:<20} {count}")
 
@@ -974,6 +1075,7 @@ def main() -> None:
         features_by_split,
         targets_by_split,
         preview,
+        args.vocabulary,
     )
     print(preview)
     print(f"Saved prepared pairs to {output_dir}")

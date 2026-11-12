@@ -19,6 +19,8 @@ INCLUDE = 128
 
 
 def main() -> None:
+    if not STATE.exists():
+        raise SystemExit(f"Missing {STATE}. Train first: python code/train_vanilla.py")
     state = np.load(STATE)["state"]
     counts = np.bincount(state.ravel(), minlength=256)
     states = np.arange(256)

@@ -48,6 +48,7 @@ def _load_machine(results_dir: Path) -> VanillaTsetlinMachine:
         n_classes=n_classes,
         number_of_state_bits=int(hyper["number_of_state_bits"]),
         seed=int(hyper["seed"]),
+        boost_true_positive_feedback=int(hyper.get("boost_true_positive_feedback", 0)),
     )
     machine.state = state
     return machine
@@ -70,18 +71,45 @@ def _clause_lines(machine: VanillaTsetlinMachine, vocabulary: list[str]) -> list
     return lines or ["No clause included a literal."]
 
 
-def measure(data_dir: Path = DEFAULT_DATA, results_dir: Path = RESULTS) -> str:
-    """Return the scoring printout. Raise FileNotFoundError if training has not been saved."""
+def trained_data_dir(results_dir: Path = RESULTS) -> Path | None:
+    """The prepared dataset the saved model was trained on, if it is still on disk."""
+
+    pilot_path = results_dir / "vanilla_pilot.json"
+    if not pilot_path.exists():
+        return None
+    recorded = json.loads(pilot_path.read_text(encoding="utf-8")).get("data_dir")
+    if not recorded:
+        return None
+    path = Path(recorded)
+    return path if (path / "features_val.npz").exists() else None
+
+
+def measure(data_dir: Path | None = None, results_dir: Path = RESULTS) -> str:
+    """Return the scoring printout. Raise FileNotFoundError if training has not been saved.
+
+    Without ``data_dir`` the model is scored on the dataset it was trained on,
+    which is recorded in ``vanilla_pilot.json``. A newer prepared dataset can
+    have a different vocabulary, and its columns would not mean the same words.
+    """
 
     state_path = results_dir / "vanilla_state.npz"
     pilot_path = results_dir / "vanilla_pilot.json"
     if not state_path.exists() or not pilot_path.exists():
         raise FileNotFoundError(state_path)
 
+    if data_dir is None:
+        data_dir = trained_data_dir(results_dir) or DEFAULT_DATA
     machine = _load_machine(results_dir)
+    width = int(np.load(data_dir / "features_val.npz")["X"].shape[1])
+    if width != machine.n_features:
+        raise ValueError(
+            f"The saved model expects {machine.n_features} features, but {data_dir.name} has {width}. "
+            "Train again on this dataset: python code/train_vanilla.py --data <that folder>."
+        )
     vocabulary = json.loads((data_dir / "vocabulary.json").read_text(encoding="utf-8"))["words"]
     lines = [
         "Scored the saved Tsetlin Machine on the feature files.",
+        f"dataset {data_dir.name}",
         f"clauses {machine.n_clauses}, T {machine.T}, s {machine.s}",
         "",
     ]

@@ -24,6 +24,10 @@ The update rules follow ``tm_update`` in pyTsetlinMachine's
   example and are not already included. That is the elimination step: the
   clause gains a literal that blocks this example.
 
+``boost_true_positive_feedback = 1`` can be passed to the constructor. A true
+literal of a firing clause is then always reinforced toward Include, which is
+the library default. The pilot keeps it at 0.
+
 ``number_of_state_bits = 8`` matches the library default. Include is the
 high bit, so the state runs from 0 to 255 and Include begins at 128. New
 automata start at 127, one step on the Exclude side of that boundary.
@@ -46,6 +50,7 @@ class VanillaTsetlinMachine:
         n_classes: int = 2,
         number_of_state_bits: int = 8,
         seed: int = 457,
+        boost_true_positive_feedback: int = 0,
     ) -> None:
         if n_clauses < 2 or n_clauses % 2 != 0:
             raise ValueError("The clause count must be a positive even number.")
@@ -64,7 +69,9 @@ class VanillaTsetlinMachine:
         self.number_of_state_bits = int(number_of_state_bits)
         self.include_threshold = 1 << (self.number_of_state_bits - 1)
         self.max_state = (1 << self.number_of_state_bits) - 1
-        self.boost_true_positive_feedback = 0
+        if boost_true_positive_feedback not in (0, 1):
+            raise ValueError("boost_true_positive_feedback must be 0 or 1.")
+        self.boost_true_positive_feedback = int(boost_true_positive_feedback)
         self.weighted_clauses = False
         self.rng = np.random.default_rng(seed)
         # Shape: class, clause, literal. Literals are [x, not x].
@@ -94,14 +101,37 @@ class VanillaTsetlinMachine:
         total = int((self.polarity * output.astype(np.int16)).sum())
         return int(np.clip(total, -self.T, self.T))
 
+    def class_scores(self, features: np.ndarray, chunk: int = 512) -> np.ndarray:
+        """Clipped class votes for many rows at once. Shape: rows, classes.
+
+        A clause fires when none of its included literals is false. Counting
+        the false included literals is one matrix product per class, which is
+        much faster than visiting the rows one at a time. The result is the
+        same as calling ``vote(..., predict=True)`` on every row.
+        """
+
+        rows = np.asarray(features, dtype=np.uint8)
+        if rows.ndim != 2 or rows.shape[1] != self.n_features:
+            raise ValueError(
+                f"Expected rows with {self.n_features} features. Got shape {rows.shape}."
+            )
+        scores = np.zeros((len(rows), self.n_classes), dtype=np.int32)
+        included = [
+            (self.state[class_id] >= self.include_threshold) for class_id in range(self.n_classes)
+        ]
+        for start in range(0, len(rows), chunk):
+            block = rows[start : start + chunk]
+            literal_false = np.concatenate((1 - block, block), axis=1).astype(np.float32)
+            for class_id, mask in enumerate(included):
+                violations = literal_false @ mask.T.astype(np.float32)
+                output = (violations == 0) & mask.any(axis=1)[None, :]
+                total = (output * self.polarity[None, :].astype(np.int32)).sum(axis=1)
+                scores[start : start + chunk, class_id] = np.clip(total, -self.T, self.T)
+        return scores
+
     def predict(self, features: np.ndarray) -> np.ndarray:
-        predictions = np.empty(len(features), dtype=np.uint32)
-        for index, row in enumerate(features):
-            literal_true = self.literals(row)
-            scores = [self.vote(class_id, literal_true, predict=True) for class_id in range(self.n_classes)]
-            # The lowest class index wins a tie. A 0-0 vote therefore predicts class 0.
-            predictions[index] = int(np.argmax(scores))
-        return predictions
+        # The lowest class index wins a tie. A 0-0 vote therefore predicts class 0.
+        return np.argmax(self.class_scores(features), axis=1).astype(np.uint32)
 
     def predict_scores(self, row: np.ndarray) -> tuple[np.ndarray, list[np.ndarray]]:
         """Return clipped class votes and the predicting clause outputs."""
@@ -130,46 +160,65 @@ class VanillaTsetlinMachine:
                     self._update_class(class_id, literal_true, class_target)
 
     def _update_class(self, class_id: int, literal_true: np.ndarray, target: int) -> None:
-        vote = self.vote(class_id, literal_true, predict=False)
+        state = self.state[class_id]
+        true_index = np.flatnonzero(literal_true)
+        false_index = np.flatnonzero(~literal_true)
+
+        # Update-time clause output: an empty clause outputs 1. Only the false
+        # literals can switch a clause off, so only those columns are read.
+        output = ~(state[:, false_index] >= self.include_threshold).any(axis=1)
+        vote = int(np.clip(int((self.polarity * output.astype(np.int16)).sum()), -self.T, self.T))
         probability = (self.T + (1 - 2 * target) * vote) / (2.0 * self.T)
         selected = self.rng.random(self.n_clauses) <= probability
         if not selected.any():
             return
 
-        output = self.clause_output(class_id, literal_true, predict=False)
         positive = self.polarity > 0
         type_i = selected & (positive if target == 1 else ~positive)
-        type_ii = selected & ~type_i & output
-        state = self.state[class_id]
+        type_ii = np.flatnonzero(selected & ~type_i & output)
 
-        if type_ii.any():
-            grow = type_ii[:, None] & (~literal_true) & (state < self.include_threshold)
-            state[grow] = np.minimum(state[grow].astype(np.uint16) + 1, self.max_state).astype(np.uint8)
+        if len(type_ii):
+            # Type II: push excluded false literals one step toward Include.
+            cells = np.ix_(type_ii, false_index)
+            block = state[cells]
+            state[cells] = block + (block < self.include_threshold)
 
-        if type_i.any():
+        if not type_i.any():
+            return
+        clause_on = np.flatnonzero(type_i & output)
+        clause_off = np.flatnonzero(type_i & ~output)
+        exclude_probability = 1.0 / self.s
+        if self.boost_true_positive_feedback:
+            include_probability = 1.0
+        else:
             include_probability = (self.s - 1.0) / self.s
-            exclude_probability = 1.0 / self.s
-            if include_probability > 0:
-                include_hit = self.rng.random((self.n_clauses, self.n_features * 2)) <= include_probability
-            else:
-                include_hit = np.zeros((self.n_clauses, self.n_features * 2), dtype=bool)
-            if exclude_probability >= 1:
-                exclude_hit = np.ones((self.n_clauses, self.n_features * 2), dtype=bool)
-            else:
-                exclude_hit = self.rng.random((self.n_clauses, self.n_features * 2)) <= exclude_probability
 
-            clause_on = type_i & output
-            clause_off = type_i & ~output
-            grow = (
-                clause_on[:, None]
-                & literal_true
-                & include_hit
-            )
-            shrink = (clause_on[:, None] & (~literal_true) & exclude_hit) | (
-                clause_off[:, None] & exclude_hit
-            )
-            state[grow] = np.minimum(state[grow].astype(np.uint16) + 1, self.max_state).astype(np.uint8)
-            state[shrink] = np.maximum(state[shrink].astype(np.int16) - 1, 0).astype(np.uint8)
+        if len(clause_on):
+            # Type Ib on the false literals of a firing clause.
+            cells = np.ix_(clause_on, false_index)
+            block = state[cells].astype(np.int16)
+            state[cells] = np.maximum(block - self._hits(block.shape, exclude_probability), 0).astype(np.uint8)
+            # Type Ia on its true literals. Never happens at s = 1 with the boost off.
+            if include_probability > 0:
+                cells = np.ix_(clause_on, true_index)
+                block = state[cells].astype(np.int16)
+                state[cells] = np.minimum(
+                    block + self._hits(block.shape, include_probability), self.max_state
+                ).astype(np.uint8)
+
+        if len(clause_off):
+            # Type Ib on every literal of a clause that did not fire.
+            block = state[clause_off].astype(np.int16)
+            state[clause_off] = np.maximum(
+                block - self._hits(block.shape, exclude_probability), 0
+            ).astype(np.uint8)
+
+    def _hits(self, shape: tuple[int, ...], probability: float) -> np.ndarray | int:
+        """1 where a step is taken. No random draw is spent on a certain step."""
+
+        if probability >= 1:
+            return 1
+        return (self.rng.random(shape) <= probability).astype(np.int16)
 
     def included_indices(self, class_id: int, clause_id: int) -> np.ndarray:
         return np.flatnonzero(self.state[class_id, clause_id] >= self.include_threshold)

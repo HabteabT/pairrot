@@ -1,13 +1,19 @@
 """Train the vanilla Tsetlin Machine on prepared Pairrot pairs.
 
 The model reads X and y only. Category names stay in the pair CSV files.
-Validation accuracy is the pilot result. The test arrays are not read unless
-``--evaluate-test`` is passed, and that flag is not part of this pilot.
+Validation accuracy is the pilot result. This script never reads the test
+arrays.
+
+``--boost 1`` turns on ``boost_true_positive_feedback``, the default in tmu and
+pyTsetlinMachine. With it, Type I always reinforces Include on the true
+literals of a firing clause, even at s = 1.0. The default here stays 0, the
+setting the report describes.
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 from pathlib import Path
 
@@ -167,6 +173,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--state-bits", type=int, default=8)
     parser.add_argument("--seed", type=int, default=457)
+    parser.add_argument(
+        "--boost",
+        type=int,
+        choices=(0, 1),
+        default=0,
+        help="boost_true_positive_feedback. 0 is the report setting. 1 is the tmu/pyTsetlinMachine default.",
+    )
     return parser.parse_args()
 
 
@@ -183,7 +196,10 @@ def main() -> None:
     data_dir = args.data.resolve()
     x_train, y_train = load_split(data_dir, "train")
     x_val, y_val = load_split(data_dir, "val")
-    vocabulary_payload = json.loads((data_dir / "vocabulary.json").read_text(encoding="utf-8"))
+    vocabulary_path = data_dir / "vocabulary.json"
+    if not vocabulary_path.exists():
+        raise SystemExit(f"Missing {vocabulary_path}. Run dataset/prepare_data.py first.")
+    vocabulary_payload = json.loads(vocabulary_path.read_text(encoding="utf-8"))
     vocabulary = vocabulary_payload["words"]
     document_frequency = vocabulary_payload["document_frequency"]
     print(f"Train X {tuple(x_train.shape)}, validation X {tuple(x_val.shape)}. Categories were not loaded.")
@@ -196,6 +212,7 @@ def main() -> None:
         n_classes=2,
         number_of_state_bits=args.state_bits,
         seed=args.seed,
+        boost_true_positive_feedback=args.boost,
     )
     for epoch in range(1, args.epochs + 1):
         machine.fit(x_train, y_train, epochs=1)
@@ -211,8 +228,12 @@ def main() -> None:
     print(f"Pilot validation accuracy {val_accuracy:.3f}")
     print(f"Validation confusion matrix [true 0, true 1] x [pred 0, pred 1]: {val_matrix}")
 
-    pair_rows = (data_dir / "pairs_val.csv").read_text(encoding="utf-8").splitlines()[1:]
-    correct_index = next(index for index, truth in enumerate(y_val) if int(truth) == int(val_predictions[index]))
+    with (data_dir / "pairs_val.csv").open(encoding="utf-8", newline="") as handle:
+        pair_ids = [row["pair_id"] for row in csv.DictReader(handle)]
+    correct_index = next(
+        (index for index, truth in enumerate(y_val) if int(truth) == int(val_predictions[index])),
+        0,
+    )
     try:
         incorrect_index = next(
             index for index, truth in enumerate(y_val) if int(truth) != int(val_predictions[index])
@@ -221,7 +242,7 @@ def main() -> None:
         incorrect_index = None
 
     def pair_id(index: int) -> str:
-        return pair_rows[index].split(",", 1)[0]
+        return pair_ids[index]
 
     sections = [
         describe_example(
@@ -276,15 +297,23 @@ def main() -> None:
             "s": args.s,
             "epochs": args.epochs,
             "number_of_state_bits": args.state_bits,
-            "boost_true_positive_feedback": 0,
+            "boost_true_positive_feedback": args.boost,
             "weighted_clauses": False,
             "seed": args.seed,
         },
         "implementation": {
             "library_attempted": "tmu==0.7.1",
             "library_error": "Microsoft Visual C++ 14.0 or greater is required",
-            "feedback_source": "pyTsetlinMachine ConvolutionalTsetlinMachine.c, boost_true_positive_feedback 0",
-            "s_equals_one": "Type I include probability is 0 and Type I exclude probability is 1",
+            "feedback_source": (
+                "pyTsetlinMachine ConvolutionalTsetlinMachine.c, "
+                f"boost_true_positive_feedback {args.boost}"
+            ),
+            "s_equals_one": (
+                "Type I include probability is 1 on true literals of a firing clause (boost on), "
+                "and Type I exclude probability is 1"
+                if args.boost
+                else "Type I include probability is 0 and Type I exclude probability is 1"
+            ),
         },
         "note": (
             f"Pilot validation accuracy {val_accuracy:.3f}. "
