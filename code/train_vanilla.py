@@ -4,6 +4,11 @@ The model reads X and y only. Category names stay in the pair CSV files.
 Validation accuracy is the pilot result. This script never reads the test
 arrays.
 
+The model is saved after every epoch that improves validation accuracy, with
+its own confusion matrix and clause list, so a run that is stopped early still
+leaves a model that matches a reported number. The previous saved model is
+moved to ``results/archive`` first and is never overwritten.
+
 ``--boost 1`` turns on ``boost_true_positive_feedback``, the default in tmu and
 pyTsetlinMachine. With it, Type I always reinforces Include on the true
 literals of a firing clause, even at s = 1.0. The default here stays 0, the
@@ -15,6 +20,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -164,6 +170,62 @@ def clause_summary(
     return lines
 
 
+SAVED_FILES = ("vanilla_state.npz", "vanilla_pilot.json", "vanilla_status.json", "vanilla_clauses.txt")
+
+
+def _replace_file(path: Path, write) -> None:
+    """Write to a temporary neighbour, then swap it in."""
+
+    temporary = path.with_name(path.name + ".partial")
+    write(temporary)
+    temporary.replace(path)
+
+
+def _save_state(path: Path, state: np.ndarray) -> None:
+    # numpy adds ".npz" to a name without it, so write through an open file.
+    with path.open("wb") as handle:
+        np.savez_compressed(handle, state=state)
+
+
+def _update_history(history: list[dict], complete: bool) -> None:
+    """Record finished epochs without touching the saved weights."""
+
+    for name in ("vanilla_pilot.json", "vanilla_status.json"):
+        path = RESULTS / name
+        if not path.exists():
+            continue
+        summary = json.loads(path.read_text(encoding="utf-8"))
+        summary["history"] = history
+        summary["epochs_finished"] = len(history)
+        summary["run_complete"] = complete
+        payload = json.dumps(summary, indent=2)
+        _replace_file(path, lambda target: target.write_text(payload, encoding="utf-8"))
+
+
+def archive_previous_results() -> Path | None:
+    """Move the last saved model aside before a new run writes its own.
+
+    A new run used to overwrite the old files, so a good run could be lost to
+    a later, worse one. The old files now go to ``results/archive/<time>_val<accuracy>``.
+    """
+
+    existing = [RESULTS / name for name in SAVED_FILES if (RESULTS / name).exists()]
+    if not existing:
+        return None
+    label = "unknown"
+    pilot = RESULTS / "vanilla_pilot.json"
+    if pilot.exists():
+        try:
+            label = f"{json.loads(pilot.read_text(encoding='utf-8'))['validation_accuracy']:.3f}"
+        except (ValueError, KeyError, TypeError):
+            pass
+    target = RESULTS / "archive" / f"{datetime.now():%Y%m%d-%H%M%S}_val{label}"
+    target.mkdir(parents=True, exist_ok=False)
+    for path in existing:
+        path.replace(target / path.name)
+    return target
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train the vanilla Tsetlin Machine on prepared pairs.")
     parser.add_argument("--data", type=Path, default=DEFAULT_DATA)
@@ -214,115 +276,143 @@ def main() -> None:
         seed=args.seed,
         boost_true_positive_feedback=args.boost,
     )
-    for epoch in range(1, args.epochs + 1):
-        machine.fit(x_train, y_train, epochs=1)
-        train_now = accuracy(y_train, machine.predict(x_train))
-        print(f"  epoch {epoch}: train accuracy {train_now:.3f}")
-
-    train_predictions = machine.predict(x_train)
-    val_predictions = machine.predict(x_val)
-    train_accuracy = accuracy(y_train, train_predictions)
-    val_accuracy = accuracy(y_val, val_predictions)
-    val_matrix = confusion_matrix(y_val, val_predictions)
-    print(f"Pilot train accuracy {train_accuracy:.3f}")
-    print(f"Pilot validation accuracy {val_accuracy:.3f}")
-    print(f"Validation confusion matrix [true 0, true 1] x [pred 0, pred 1]: {val_matrix}")
-
     with (data_dir / "pairs_val.csv").open(encoding="utf-8", newline="") as handle:
         pair_ids = [row["pair_id"] for row in csv.DictReader(handle)]
-    correct_index = next(
-        (index for index, truth in enumerate(y_val) if int(truth) == int(val_predictions[index])),
-        0,
-    )
-    try:
+
+    def save(epoch: int, history: list[dict], complete: bool) -> float:
+        """Write the model as it stands now, with its own scores, matrix, and clauses.
+
+        Every file is written under a temporary name and then renamed, so a
+        run that is stopped in the middle of a save leaves the previous files whole.
+        """
+
+        train_predictions = machine.predict(x_train)
+        val_predictions = machine.predict(x_val)
+        train_accuracy = accuracy(y_train, train_predictions)
+        val_accuracy = accuracy(y_val, val_predictions)
+        val_matrix = confusion_matrix(y_val, val_predictions)
+
+        correct_index = next(
+            (index for index, truth in enumerate(y_val) if int(truth) == int(val_predictions[index])),
+            0,
+        )
         incorrect_index = next(
-            index for index, truth in enumerate(y_val) if int(truth) != int(val_predictions[index])
+            (index for index, truth in enumerate(y_val) if int(truth) != int(val_predictions[index])),
+            None,
         )
-    except StopIteration:
-        incorrect_index = None
-
-    def pair_id(index: int) -> str:
-        return pair_ids[index]
-
-    sections = [
-        describe_example(
-            machine,
-            x_val,
-            y_val,
-            val_predictions,
-            correct_index,
-            vocabulary,
-            document_frequency,
-            pair_id(correct_index),
-        )
-    ]
-    if incorrect_index is not None:
-        sections.append(
+        sections = [
             describe_example(
-                machine,
-                x_val,
-                y_val,
-                val_predictions,
-                incorrect_index,
-                vocabulary,
-                document_frequency,
-                pair_id(incorrect_index),
+                machine, x_val, y_val, val_predictions, index, vocabulary, document_frequency, pair_ids[index]
             )
-        )
-    sections.extend(clause_summary(machine, vocabulary, document_frequency))
-    clause_text = "\n\n".join(sections)
+            for index in (correct_index, incorrect_index)
+            if index is not None
+        ]
+        sections.extend(clause_summary(machine, vocabulary, document_frequency))
+        clause_text = "\n\n".join(sections)
+
+        summary = {
+            "stage": "vanilla-pilot",
+            "label": "pilot, not the final test comparison",
+            "data_dir": str(data_dir),
+            "test_pairs_used": False,
+            "train_shape": list(x_train.shape),
+            "validation_shape": list(x_val.shape),
+            "train_accuracy": train_accuracy,
+            "validation_accuracy": val_accuracy,
+            "accuracy": val_accuracy,
+            "validation_confusion_matrix": {
+                "rows": "true Y=0, true Y=1",
+                "columns": "predicted Y=0, predicted Y=1",
+                "values": val_matrix,
+            },
+            "saved_epoch": epoch,
+            "epochs_finished": len(history),
+            "epochs_requested": args.epochs,
+            "run_complete": complete,
+            "saved_model_is": "the epoch with the highest validation accuracy so far",
+            "history": history,
+            "illustrative_one_bit_accuracy": toy_accuracy,
+            "hyperparameters": {
+                "clauses_per_class": args.clauses,
+                "T": args.T,
+                "s": args.s,
+                "epochs": args.epochs,
+                "number_of_state_bits": args.state_bits,
+                "boost_true_positive_feedback": args.boost,
+                "weighted_clauses": False,
+                "seed": args.seed,
+            },
+            "implementation": {
+                "library_attempted": "tmu==0.7.1",
+                "library_error": "Microsoft Visual C++ 14.0 or greater is required",
+                "feedback_source": (
+                    "pyTsetlinMachine ConvolutionalTsetlinMachine.c, "
+                    f"boost_true_positive_feedback {args.boost}"
+                ),
+                "s_equals_one": (
+                    "Type I include probability is 1 on true literals of a firing clause (boost on), "
+                    "and Type I exclude probability is 1"
+                    if args.boost
+                    else "Type I include probability is 0 and Type I exclude probability is 1"
+                ),
+            },
+            "note": (
+                f"Validation accuracy {val_accuracy:.3f} at epoch {epoch}. "
+                "Test pairs were not used. Categories were not model inputs."
+            ),
+        }
+        payload = json.dumps(summary, indent=2)
+        _replace_file(RESULTS / "vanilla_clauses.txt", lambda path: path.write_text(clause_text, encoding="utf-8"))
+        _replace_file(RESULTS / "vanilla_state.npz", lambda path: _save_state(path, machine.state))
+        _replace_file(RESULTS / "vanilla_pilot.json", lambda path: path.write_text(payload, encoding="utf-8"))
+        _replace_file(RESULTS / "vanilla_status.json", lambda path: path.write_text(payload, encoding="utf-8"))
+        return val_accuracy
 
     RESULTS.mkdir(parents=True, exist_ok=True)
-    (RESULTS / "vanilla_clauses.txt").write_text(clause_text, encoding="utf-8")
-    np.savez_compressed(RESULTS / "vanilla_state.npz", state=machine.state)
-    summary = {
-        "stage": "vanilla-pilot",
-        "label": "pilot, not the final test comparison",
-        "data_dir": str(data_dir),
-        "test_pairs_used": False,
-        "train_shape": list(x_train.shape),
-        "validation_shape": list(x_val.shape),
-        "train_accuracy": train_accuracy,
-        "validation_accuracy": val_accuracy,
-        "accuracy": val_accuracy,
-        "validation_confusion_matrix": {
-            "rows": "true Y=0, true Y=1",
-            "columns": "predicted Y=0, predicted Y=1",
-            "values": val_matrix,
-        },
-        "illustrative_one_bit_accuracy": toy_accuracy,
-        "hyperparameters": {
-            "clauses_per_class": args.clauses,
-            "T": args.T,
-            "s": args.s,
-            "epochs": args.epochs,
-            "number_of_state_bits": args.state_bits,
-            "boost_true_positive_feedback": args.boost,
-            "weighted_clauses": False,
-            "seed": args.seed,
-        },
-        "implementation": {
-            "library_attempted": "tmu==0.7.1",
-            "library_error": "Microsoft Visual C++ 14.0 or greater is required",
-            "feedback_source": (
-                "pyTsetlinMachine ConvolutionalTsetlinMachine.c, "
-                f"boost_true_positive_feedback {args.boost}"
-            ),
-            "s_equals_one": (
-                "Type I include probability is 1 on true literals of a firing clause (boost on), "
-                "and Type I exclude probability is 1"
-                if args.boost
-                else "Type I include probability is 0 and Type I exclude probability is 1"
-            ),
-        },
-        "note": (
-            f"Pilot validation accuracy {val_accuracy:.3f}. "
-            "Test pairs were not used. Categories were not model inputs."
-        ),
-    }
-    (RESULTS / "vanilla_pilot.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    (RESULTS / "vanilla_status.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    print(clause_text[:4000])
+    archived = archive_previous_results()
+    if archived is not None:
+        print(f"The previous saved model was moved to {archived}. Nothing was deleted.")
+
+    history: list[dict] = []
+    best_accuracy = -1.0
+    best_epoch = 0
+    best_state = machine.state.copy()
+    try:
+        for epoch in range(1, args.epochs + 1):
+            machine.fit(x_train, y_train, epochs=1)
+            train_now = accuracy(y_train, machine.predict(x_train))
+            val_now = accuracy(y_val, machine.predict(x_val))
+            history.append({"epoch": epoch, "train_accuracy": train_now, "validation_accuracy": val_now})
+            improved = val_now > best_accuracy
+            if improved:
+                best_accuracy, best_epoch = val_now, epoch
+                best_state = machine.state.copy()
+                save(epoch, history, complete=False)
+            else:
+                # Keep the saved model, but record that another epoch has finished.
+                _update_history(history, complete=False)
+            print(
+                f"  epoch {epoch}: train accuracy {train_now:.3f}, validation accuracy {val_now:.3f}"
+                + ("  (saved)" if improved else ""),
+                flush=True,
+            )
+    except KeyboardInterrupt:
+        print("\nStopped by the keyboard. The best epoch so far is already saved.")
+
+    if best_epoch == 0:
+        raise SystemExit("No epoch finished, so no model was saved.")
+    # Finish with the best epoch in memory, so the files and the printout describe the same model.
+    machine.state = best_state
+    final_accuracy = save(best_epoch, history, complete=len(history) == args.epochs)
+    summary = json.loads((RESULTS / "vanilla_pilot.json").read_text(encoding="utf-8"))
+    print(f"Saved model: epoch {best_epoch} of {len(history)} finished")
+    print(f"Pilot train accuracy {summary['train_accuracy']:.3f}")
+    print(f"Pilot validation accuracy {final_accuracy:.3f}")
+    print(
+        "Validation confusion matrix [true 0, true 1] x [pred 0, pred 1]: "
+        f"{summary['validation_confusion_matrix']['values']}"
+    )
+    print((RESULTS / "vanilla_clauses.txt").read_text(encoding="utf-8")[:4000])
     print(f"Wrote {RESULTS / 'vanilla_pilot.json'}")
     print(f"Wrote {RESULTS / 'vanilla_clauses.txt'}")
 
