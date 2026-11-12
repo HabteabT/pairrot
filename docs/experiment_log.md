@@ -114,3 +114,11 @@ The guidance for that habit comes from Martin A. Schwartz, "The importance of st
 - What we learned: three things moved the result. More pairs helped up to 30,000 and not beyond at this clause count. A smaller, more topical vocabulary helped: 300 words beat 1,000, and 2,000 was worse than 1,000. A low T relative to the clause count helped, and more clauses helped once T was low. The gap between training and validation accuracy shrank from 0.23 to 0.04 along the way, so the first topical runs were memorising pairs and the last one is not. The model is better at saying "different" than "same". With 200 words about 24% of validation pairs have a post with none of the words, so a smaller vocabulary than 300 trades coverage for clarity.
 - Caution: the settings were chosen on the validation pairs. The check pairs agree with validation, which says the choice did not overfit those 2,000 pairs, but check and validation share the same posts. The official test pairs are the only clean number, and they have not been read.
 - Command: double-click `run_best.bat`, or run its three commands by hand.
+
+### 2026-11-12 — On the best data, is boost the only thing between 0.50 and 0.75?
+
+- Question: the best run changed the vocabulary, the posts, the pair count, and boost. If only boost is switched off, what is left?
+- Where this ran: the development copy of the official training posts. No test posts.
+- Settings: identical to the best run (300 topical words, full posts, 30,000 pairs, 800 clauses per class, T = 50, s = 1.0, 8 epochs, seed 457), with boost 0. Pairs were visited in a shuffled order.
+- What happened: training accuracy 0.515, validation 0.499, check 0.490. The model held 15 included literals after 8 epochs. The matching boost 1 run in shuffled order scored 0.744 on validation and 0.742 on check.
+- What we learned: with everything else at its best setting, boost 0 stays at chance. The vocabulary, the full posts, and the pair count only matter once Type I is allowed to include true literals.
