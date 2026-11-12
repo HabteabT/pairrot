@@ -9,6 +9,10 @@ Four separate parts. Each one has its own folder and its own command.
 | `backend/` | Serves the dashboard and its data. | Double-click `start.bat` |
 | `frontend/` | The dashboard page. The backend serves it. | Open http://127.0.0.1:8000 |
 
+## Best vanilla run so far
+
+Double-click `run_best.bat`. It builds the pairs (full posts, 300 topical words, 30,000 training pairs), trains the vanilla machine at s = 1.0 with `--boost 1`, 800 clauses per class and T = 50, and redraws the state histogram. On a development copy of the training posts this reached validation accuracy 0.759. The experiment log entries for 2026-11-12 give every run that led there and what has to be said about the choices in the report.
+
 Use the project virtual environment when it exists:
 
 ```powershell

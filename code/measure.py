@@ -54,19 +54,36 @@ def _load_machine(results_dir: Path) -> VanillaTsetlinMachine:
     return machine
 
 
+CLAUSES_SHOWN_PER_CLASS = 10
+
+
 def _clause_lines(machine: VanillaTsetlinMachine, vocabulary: list[str]) -> list[str]:
+    """A short sample of the clauses. The full list is in vanilla_clauses.txt."""
+
     lines = []
     for class_id in range(machine.n_classes):
+        shown = 0
+        nonempty = 0
         for clause_id in range(machine.n_clauses):
             included = machine.included_indices(class_id, clause_id)
             if len(included) == 0:
                 continue
+            nonempty += 1
+            if shown >= CLAUSES_SHOWN_PER_CLASS:
+                continue
+            shown += 1
             phrases = [
                 literal_phrase(int(index), machine.n_features, vocabulary) for index in included[:8]
             ]
+            more = f", and {len(included) - 8} more" if len(included) > 8 else ""
             polarity = "positive" if clause_id % 2 == 0 else "negative"
             lines.append(
-                f"class {class_id} clause {clause_id} ({polarity}): {', '.join(phrases)}"
+                f"class {class_id} clause {clause_id} ({polarity}): {', '.join(phrases)}{more}"
+            )
+        if nonempty > shown:
+            lines.append(
+                f"class {class_id}: {nonempty - shown} more clauses with literals. "
+                "All of them are in code/results/vanilla_clauses.txt."
             )
     return lines or ["No clause included a literal."]
 
