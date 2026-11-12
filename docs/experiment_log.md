@@ -63,5 +63,26 @@ The guidance for that habit comes from Martin A. Schwartz, "The importance of st
 - What changed: `dataset/prepare_data.py --full-text` keeps the posts as distributed. The default still removes headers, footers, and quotes. For this check the vocabulary was the 1,000 most frequent words that occur in at most 10% of the training posts.
 - Settings: 10,000 training pairs, 2,000 validation pairs, 200 clauses per class, T = 50, s = 1.0, 6 epochs, seed 457.
 - What happened: no post was empty. Boost 0 reached validation accuracy 0.516. Boost 1 reached 0.537 with training accuracy 0.726. The logistic-regression reference on "the same word is in both posts" rose from about 0.58 to 0.65.
-- What we learned: full posts carry more signal, and boost 1 picks up a little of it: 0.537 is about three standard errors above 0.500. It is still far from the reference. The reason is structural. At s = 1.0 a clause that does not fire on a target-class pair has every literal pushed toward Exclude, so only clauses that fire on most pairs of their class survive. A flat clause is a condition on Post A joined by AND to a condition on Post B. If it fires on most same-category pairs, both conditions hold for most posts of every category, and then it fires on most different-category pairs as well. A clause that is specific to one category, such as "hockey in A and hockey in B", fires on about one same-category pair in twenty and is erased. One flat conjunction cannot be both general and discriminating on this target. A clause that can hold alternatives joined by OR can, which is what the hierarchical machine adds.
+- What we learned: full posts carry more signal, and boost 1 picks up a little of it: 0.537 is about three standard errors above 0.500. With boost 0 there is a structural reason for staying at chance. At s = 1.0 a clause that does not fire on a target-class pair has every literal pushed toward Exclude, and Type I never includes anything, so a clause specific to one category, such as "hockey in A and hockey in B", fires on about one same-category pair in twenty and is erased. This entry first concluded that the same limit holds with boost 1. The next entry shows that conclusion was too strong: with a topical vocabulary, boost 1 does generalise.
 - Command: `python dataset/prepare_data.py --full-text --train-pairs 10000 --val-pairs 2000`, then `python code/train_vanilla.py --boost 1 --data dataset/prepared/<the new folder>`.
+
+### 2026-11-12 — Can a topical vocabulary take the s = 1.0 machine past 0.55?
+
+- Question: boost 1 learns by listing absent words. With a vocabulary of frequent words that list did not transfer. If the vocabulary holds the words that separate the categories, does elimination start to generalise?
+- Where this ran: the development copy of the official training posts, not the project machine. No test posts. One number was repeated with the project's own `code/train_vanilla.py`.
+- What changed: `dataset/prepare_data.py --vocabulary topical` scores each word by the chi-square statistic between its presence and the category, on training posts only, without English stop words and without words in fewer than five training posts. The categories now choose the vocabulary as well as building Y. They are still not features, and validation posts are not used for the choice. The default vocabulary is unchanged.
+- Settings: 1,000 words, 10,000 training pairs, s = 1.0, boost 1, 200 clauses per class, T = 50, seed 457. Validation is 2,000 pairs. "Check" is a second set of 2,000 pairs from the validation posts, drawn with another seed and never used to pick anything.
+- What happened:
+
+| Run | Train | Validation | Check |
+| --- | ---: | ---: | ---: |
+| Cleaned posts, 8 epochs | 0.775 | 0.546 | 0.561 |
+| Full posts, 8 epochs | 0.808 | 0.593 | 0.599 |
+| Full posts, 8 epochs, project script (fixed pair order) | 0.812 | 0.589 | not scored |
+| Full posts, 8 epochs, 800 clauses, T = 200 | 0.807 | 0.607 | 0.614 |
+| Full posts, 24 epochs | 0.847 | 0.617 | 0.623 |
+
+  Every included literal was negated: about 144,000 of them in 400 clauses after 24 epochs, roughly 360 absent words per clause. The logistic-regression reference on "the same word is in both posts" reached 0.678 with full posts and 0.597 with cleaned posts. With cleaned posts about 14% of pairs have a side with none of the 1,000 words. With full posts it is under 1%.
+- What we learned: the vanilla machine at s = 1.0 can pass 0.55, and it does so by elimination. A clause that lists the topical words of many categories as absent from both posts is left with pairs that share the remaining topics. That only works when the vocabulary is topical and when Type I can include true literals, which is what boost 1 does. The earlier runs failed for two separate reasons: boost 0 cannot build such a clause, and a frequent-word vocabulary gives it nothing to eliminate. Full posts matter because a cleaned post often contains none of the words. Accuracy was still rising at 24 epochs.
+- What to say in the report: the vocabulary was chosen with the category labels of the training posts, the posts were not cleaned, and boost was 1. All three are choices, not requirements of the brief.
+- Commands: `python dataset/prepare_data.py --full-text --vocabulary topical --train-pairs 10000 --val-pairs 2000`, then `python code/train_vanilla.py --boost 1 --epochs 24 --data dataset/prepared/s457_f1000_t10000_v2000_e200_val0p2_fulltext_topical`.

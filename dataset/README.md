@@ -41,3 +41,13 @@ The prepared files from the first verified run are in:
 - 1,000 / 200 / 200 pairs, each split half Y=1 and half Y=0.
 - Feature matrices have shape `(pairs, 2000)`.
 - Every feature row was recomputed and matched.
+
+## Options
+
+| Option | What it does |
+| --- | --- |
+| `--full-text` | Keeps headers, footers, and quoted text. The default removes them. The course brief does not require the removal. |
+| `--vocabulary topical` | Chooses the words that best separate the categories on the training posts (chi-square), without stop words. The default, `frequency`, takes the most common words. |
+| `--train-pairs`, `--val-pairs`, `--test-pairs` | Pair counts. 200 validation pairs cannot separate 0.52 from 0.50, so 2,000 is a better size. |
+
+Each option changes the output folder name, so runs do not overwrite each other.
