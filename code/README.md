@@ -34,3 +34,29 @@ Results in `code/results/` are not committed.
 `train.bat` passes extra arguments on, for example `train.bat --boost 1 --epochs 20`, and redraws `state_histogram.png` after training so the dashboard figure matches the new model.
 
 The hierarchical model in `PyHierarchicalTsetlinMachineCUDA` needs an NVIDIA GPU and PyCUDA. This machine has Intel Iris Xe graphics and no `nvidia-smi`, so that model is not replaced here by another flat Tsetlin Machine.
+
+
+## The course library (GPU)
+
+The course asks for the vanilla machine to be built with [PyHierarchicalTsetlinMachineCUDA](https://github.com/cair/PyHierarchicalTsetlinMachineCUDA), following `examples/MultiConceptDemo.py`, with
+
+```
+hierarchy_structure=(
+    (tm.AND_GROUP, features),
+    (tm.AND_GROUP, 1)
+)
+```
+
+`code/train_vanilla_cuda.py` does that on the prepared pairs. It needs an NVIDIA GPU. Without one, use Google Colab: Runtime, Change runtime type, GPU, then run these cells.
+
+```
+!git clone https://github.com/HabteabT/pairrot.git
+%cd pairrot
+!pip install -r requirements.txt PyHierarchicalTsetlinMachineCUDA
+!python dataset/prepare_data.py --full-text --vocabulary topical --max-features 300 --train-pairs 30000 --val-pairs 2000 --test-pairs 2000
+!python code/train_vanilla_cuda.py
+```
+
+The example passes `boost_true_positive_feedback=0` and `append_negated=False` for its own task at s = 21.1. The script defaults to the library defaults, boost 1 and negated literals on, because at s = 1.0 the other settings leave nothing to learn with. `--boost 0` and `--no-negated` give the example's settings. The library's Type I and Type II rules are the same as in `code/vanilla_tsetlin.py`; its kernel was read for that comparison, not run.
+
+`train_vanilla_cuda.py` has not been run on a GPU yet. Results go to `code/results/vanilla_cuda.json`.
