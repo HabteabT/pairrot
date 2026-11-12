@@ -207,15 +207,24 @@ def ensure_newsgroups_archive(data_home: Path) -> dict[str, str]:
     )
 
 
-def load_official_subset(subset: str, data_home: Path) -> tuple[list[Document], list[str]]:
-    """Load one official 20 Newsgroups subset, with headers, footers, and quotes removed."""
+def load_official_subset(
+    subset: str,
+    data_home: Path,
+    full_text: bool = False,
+) -> tuple[list[Document], list[str]]:
+    """Load one official 20 Newsgroups subset.
+
+    Headers, footers, and quotes are removed unless ``full_text`` is set. The
+    course brief does not ask for the removal. It is this project's stricter
+    default, and ``--full-text`` keeps the posts as distributed.
+    """
 
     bunch = fetch_20newsgroups(
         data_home=str(data_home),
         subset=subset,
         categories=None,
         shuffle=False,
-        remove=("headers", "footers", "quotes"),
+        remove=() if full_text else ("headers", "footers", "quotes"),
         download_if_missing=True,
     )
     origin = "official_train" if subset == "train" else "official_test"
@@ -663,6 +672,8 @@ def output_directory(args: argparse.Namespace) -> Path:
         f"s{args.seed}_f{args.max_features}_t{args.train_pairs}"
         f"_v{args.val_pairs}_e{args.test_pairs}_val{fraction}"
     )
+    if args.full_text:
+        name += "_fulltext"
     return ROOT / "prepared" / name
 
 
@@ -777,6 +788,11 @@ def build_settings(
         "output_dir": str(output_dir),
         "assignment_requirements": ASSIGNMENT_REQUIREMENTS,
         "experiment_choices": {
+            "post_text": (
+                "full posts as distributed, headers, footers, and quotes kept"
+                if args.full_text
+                else "headers, footers, and quotes removed by the loader"
+            ),
             "validation_fraction": args.val_fraction,
             "validation_split": "stratified by category, using scikit-learn train_test_split",
             "max_features": args.max_features,
@@ -833,6 +849,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--preview-per-class", type=int, default=2)
     parser.add_argument("--output", type=str, default="")
     parser.add_argument(
+        "--full-text",
+        action="store_true",
+        help="Keep headers, footers, and quoted text. The default removes them.",
+    )
+    parser.add_argument(
         "--data-home",
         type=str,
         default=str(ROOT / "cache"),
@@ -852,8 +873,8 @@ def main() -> None:
     archive_info = ensure_newsgroups_archive(data_home)
     print(f"Dataset archive: {archive_info}")
     print("Loading the official 20 Newsgroups training and test posts...")
-    official_train, train_categories = load_official_subset("train", data_home)
-    official_test, test_categories = load_official_subset("test", data_home)
+    official_train, train_categories = load_official_subset("train", data_home, args.full_text)
+    official_test, test_categories = load_official_subset("test", data_home, args.full_text)
     if train_categories != test_categories:
         raise RuntimeError("The official train and test subsets do not use the same categories.")
     category_names = train_categories
