@@ -25,9 +25,13 @@ The first verified run is:
 
 `dataset/prepared/s457_f1000_t1000_v200_e200_val0p2`
 
-`train.bat` and the saved models use the larger cleaned set:
+`train.bat` uses the larger cleaned set:
 
 `dataset/prepared/s457_f1000_t10000_v2000_e2000_val0p2`
+
+The dashboard models use the full-post topical set:
+
+`dataset/prepared/s457_f300_t30000_v2000_e2000_val0p2_fulltext_topical`
 
 | File | Role |
 | --- | --- |

@@ -25,4 +25,4 @@ python -m venv .venv
 
 The dataset catalog is in `docs/datasets.md`. The report draft is in `docs/report.md`. The run log is in `docs/experiment_log.md`.
 
-On the cleaned 10,000-pair dataset, s = 1.0, the dashboard shows the boost-on run: vanilla validation 0.521 and hierarchical validation 0.529. The same pairs with boost off scored 0.517 and 0.501. Those files are in `code/results/archive/20261117-224250_val0.517` and `hierarchical/results/archive/boost0_val0.501`. The test pairs were not used. The comparison is written in `docs/datasets.md`.
+The dashboard shows the flexible run: full posts, 300 topical words, s = 1.0, boost on. Vanilla validation is 0.711. The second Tsetlin level, trained on those clause outputs and on shared words, is 0.726. The required cleaned pairs stay in the comparison: boost off is 0.517 and 0.501, boost on is 0.523 and 0.529. Those files are archived. The test pairs were not used. The catalog is `docs/datasets.md`.

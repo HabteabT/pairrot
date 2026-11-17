@@ -167,3 +167,16 @@ The guidance for that habit comes from Martin A. Schwartz, "The importance of st
 - Dataset: `dataset/prepared/s457_f1000_t10000_v2000_e2000_val0p2`. Test pairs were not read. The boost-off models were archived before this run.
 - What happened: vanilla, 200 clauses, T = 50, boost 1, 12 epochs. Best validation 0.521 at epoch 8, training 0.720, confusion matrix `[[534, 466], [491, 509]]`. Hierarchical tree, 40 clauses, 4 leaves per group, boost 1, 12 epochs. Best validation 0.529 at epoch 9, training 0.566, confusion matrix `[[775, 225], [717, 283]]`.
 - What we learned: boost on raises the training accuracy clearly and the validation accuracy only slightly. The report can put the two settings next to each other: boost off is 0.517 and 0.501, boost on is 0.521 and 0.529.
+
+### 2026-11-17 — Does another boost-on run move validation?
+
+- Question: the boost-on models were at 0.521 and 0.529. Training further from those saved weights, still at s = 1.0 with boost on, does validation rise?
+- What happened: vanilla epochs 13 to 24. The best validation accuracy became 0.523 at epoch 20, training accuracy 0.732, confusion matrix `[[537, 463], [490, 510]]`. The hierarchical tree, epochs 13 to 24, did not beat 0.529, so epoch 9 stayed saved.
+- What we learned: more boost-on epochs add a little to the vanilla score and do not raise the hierarchical score.
+
+### 2026-11-17 — Can the pair task stay, with a more flexible dataset, and still beat the vanilla model?
+
+- Question: cleaned frequent words stay near 0.52 even with boost on. If the pair task and s = 1.0 stay, and the flexible choices are full posts, a topical vocabulary, and boost on, does a second Tsetlin machine beat the vanilla validation of 0.711?
+- Dataset: `dataset/prepared/s457_f300_t30000_v2000_e2000_val0p2_fulltext_topical`. 300 topical words, 30,000 training pairs, 2,000 validation pairs. Test pairs were not read. The cleaned boost-on models were archived first.
+- What happened: the saved vanilla machine is epoch 23, training 0.763, validation 0.711, confusion matrix `[[842, 158], [420, 580]]`. A second Tsetlin machine was trained for 8 epochs on that machine's clause outputs plus 300 shared-word bits. Clauses 200, T = 50, s = 1.0, boost on. Best validation 0.726 at epoch 8, training 0.737, confusion matrix `[[641, 359], [189, 811]]`.
+- What we learned: the flexible choices lift validation from about 0.52 to 0.711, and the second Tsetlin level reaches 0.726. The earlier 0.781 figure was a weighted readout on the same clauses. It is not this saved model. The cleaned boost-off and boost-on numbers stay in `docs/datasets.md` for the report.
