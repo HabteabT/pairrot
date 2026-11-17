@@ -25,14 +25,14 @@
   </section>
 
   <section>
-    <h2>Automaton states</h2>
-    <p class="source">One bar for each state of the saved vanilla model, s = 1.0. Teal is still Exclude. Gold is Include, which starts at state 128. The vertical axis is a log scale, so that short Include bar stays visible.</p>
-    <img id="state-histogram" alt="Histogram of automaton states. Most automata are at state 0. A short gold bar at state 128 is Include.">
+    <h2>Accuracy by epoch</h2>
+    <p class="source">Solid lines are the vanilla model, one point per epoch. Dashed lines are the hierarchical model. It is one trained result, so those lines stay level. The marked vanilla point is the saved validation score.</p>
+    <img id="accuracy-line" alt="Vanilla training and validation by epoch, with hierarchical training and validation as level lines.">
   </section>
 
   <section>
     <h2>Model output</h2>
-    <p class="source">This block is the scoring run. It predicts with the saved automata on the feature files.</p>
+    <p class="source">This is the saved model, the same run as the validation score above.</p>
     <pre id="run-output">Waiting for the model...</pre>
   </section>
 
