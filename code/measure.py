@@ -54,7 +54,7 @@ def _load_machine(results_dir: Path) -> VanillaTsetlinMachine:
     return machine
 
 
-CLAUSES_SHOWN_PER_CLASS = 10
+CLAUSES_SHOWN_PER_CLASS = 3
 
 
 def _clause_lines(machine: VanillaTsetlinMachine, vocabulary: list[str]) -> list[str]:
@@ -147,11 +147,8 @@ def measure(data_dir: Path | None = None, results_dir: Path = RESULTS) -> str:
             "validation confusion matrix, rows are true Y and columns are predicted Y",
             f"Y=0  predicted 0: {matrix[0][0]:4}   predicted 1: {matrix[0][1]:4}",
             f"Y=1  predicted 0: {matrix[1][0]:4}   predicted 1: {matrix[1][1]:4}",
-            "",
-            "included literals",
         ]
     )
-    lines.extend(_clause_lines(machine, vocabulary))
     return "\n".join(lines)
 
 
