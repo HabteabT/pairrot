@@ -3,11 +3,12 @@
 PyHierarchicalTsetlinMachineCUDA needs an NVIDIA GPU. This computer has none,
 so the same tree is trained here. It is not the CUDA library.
 
-One clause is a tree with two groups, one for Post A and one for Post B.
-Inside a group, each leaf is an ordinary conjunction, and the group adds the
-leaf outputs. That is OR replaced by addition. The clause multiplies the two
-group sums. That is AND. A leaf is updated only when the other group is
-active, which is the AND on the path from that leaf to the root.
+One clause is a tree with two groups. Inside a group, each leaf is an ordinary
+conjunction over both posts, and the group adds the leaf outputs. That is OR
+replaced by addition. The clause multiplies the two group sums. That is AND.
+A leaf is updated only when the other group is active, which is the AND on
+the path from that leaf to the root. A leaf can name a word in Post A and the
+same word in Post B, which is the pair relation.
 
 s stays 1.0. With the boost flag off, Type I never includes a true literal.
 With the boost flag on, a firing leaf includes every true literal. Both
@@ -20,7 +21,7 @@ import numpy as np
 
 
 class HierarchicalTsetlinMachine:
-    """Two classes. Each clause is an AND of a Post A group and a Post B group."""
+    """Two classes. Each clause is an AND of two groups, and every leaf reads both posts."""
 
     def __init__(
         self,
@@ -57,9 +58,10 @@ class HierarchicalTsetlinMachine:
         self.include_threshold = 1 << (number_of_state_bits - 1)
         self.max_state = (1 << number_of_state_bits) - 1
         self.rng = np.random.default_rng(seed)
-        # class, clause, group, leaf, literal. Literals are the post's own [x, not x].
+        # class, clause, group, leaf, literal. Literals are [x, not x] for both posts.
+        self.n_literals = self.n_features * 2
         self.state = np.full(
-            (self.n_classes, self.n_clauses, self.n_groups, self.n_leaves, self.n_words * 2),
+            (self.n_classes, self.n_clauses, self.n_groups, self.n_leaves, self.n_literals),
             self.include_threshold - 1,
             dtype=np.uint8,
         )
@@ -89,16 +91,15 @@ class HierarchicalTsetlinMachine:
         if rows.ndim != 2 or rows.shape[1] != self.n_features:
             raise ValueError(f"Expected rows with {self.n_features} features. Got {rows.shape}.")
         parts: list[list[np.ndarray]] = []
-        posts = (rows[:, : self.n_words], rows[:, self.n_words :])
         for class_id in range(self.n_classes):
             groups = []
-            for group, post in enumerate(posts):
+            for group in range(self.n_groups):
                 sums = np.zeros((len(rows), self.n_clauses), dtype=np.int32)
                 for start in range(0, len(rows), 256):
-                    block = post[start : start + 256]
+                    block = rows[start : start + 256]
                     literal_true = np.concatenate((block, 1 - block), axis=1).astype(bool)
                     included = self.state[class_id, :, group] >= self.include_threshold
-                    mask = included.reshape(-1, self.n_words * 2)
+                    mask = included.reshape(-1, self.n_literals)
                     literal_false = (1 - literal_true.astype(np.float32))
                     violations = literal_false @ mask.T.astype(np.float32)
                     fired = (violations == 0)
@@ -131,8 +132,8 @@ class HierarchicalTsetlinMachine:
         else:
             include_probability = (self.s - 1.0) / self.s
         for row, target in zip(rows, labels):
-            posts = (row[: self.n_words], row[self.n_words :])
-            literals = [self._post_literals(post) for post in posts]
+            literal_true = self._post_literals(row)
+            literals = [literal_true, literal_true]
             for class_id in range(self.n_classes):
                 class_target = 1 if class_id == int(target) else 0
                 self._update_class(class_id, literals, class_target, include_probability, exclude_probability)
@@ -172,6 +173,16 @@ class HierarchicalTsetlinMachine:
                 include_probability,
                 exclude_probability,
             )
+            # The other group did not fire, so this AND is false. Push the
+            # literals toward Exclude, which is what a vanilla clause does
+            # when it does not fire. Without this step a leaf that copied
+            # one training pair stays frozen and never votes again.
+            frozen = np.flatnonzero(type_i & ~active)
+            if len(frozen):
+                block = state[frozen, group].astype(np.int16)
+                state[frozen, group] = np.maximum(
+                    block - self._hits(block.shape, exclude_probability), 0
+                ).astype(np.uint8)
 
     def _update_leaves(
         self,
@@ -226,7 +237,7 @@ class HierarchicalTsetlinMachine:
 
     def describe(self, vocabulary: list[str], limit_clauses: int = 2, limit_literals: int = 6) -> str:
         lines = [
-            "Each clause is the AND of a Post A group and a Post B group.",
+            "Each clause is the AND of two groups. Every leaf reads Post A and Post B.",
             "A group adds its leaf conjunctions. s = 1.0. "
             f"Boost is {'on' if self.boost_true_positive_feedback else 'off'}.",
             "",
@@ -239,7 +250,7 @@ class HierarchicalTsetlinMachine:
                     break
                 groups = []
                 nonempty = False
-                for group, post_name in ((0, "Post A"), (1, "Post B")):
+                for group in range(self.n_groups):
                     leaves = []
                     for leaf in range(self.n_leaves):
                         included = np.flatnonzero(
@@ -249,12 +260,12 @@ class HierarchicalTsetlinMachine:
                             continue
                         nonempty = True
                         phrases = [
-                            _leaf_phrase(int(index), self.n_words, vocabulary, post_name)
+                            _leaf_phrase(int(index), self.n_words, vocabulary)
                             for index in included[:limit_literals]
                         ]
                         more = f", and {len(included) - limit_literals} more" if len(included) > limit_literals else ""
                         leaves.append(", ".join(phrases) + more)
-                    groups.append(f"  {post_name}: " + (" | ".join(leaves) if leaves else "(empty)"))
+                    groups.append(f"  group {group + 1}: " + (" | ".join(leaves) if leaves else "(empty)"))
                 if not nonempty:
                     continue
                 shown += 1
@@ -267,10 +278,16 @@ class HierarchicalTsetlinMachine:
         return "\n".join(lines).rstrip() + "\n"
 
 
-def _leaf_phrase(literal_index: int, n_words: int, vocabulary: list[str], post_name: str) -> str:
-    negated = literal_index >= n_words
-    feature = literal_index - n_words if negated else literal_index
-    word = vocabulary[feature]
+def _leaf_phrase(literal_index: int, n_words: int, vocabulary: list[str]) -> str:
+    n_features = n_words * 2
+    negated = literal_index >= n_features
+    feature = literal_index - n_features if negated else literal_index
+    if feature < n_words:
+        post_name = "Post A"
+        word = vocabulary[feature]
+    else:
+        post_name = "Post B"
+        word = vocabulary[feature - n_words]
     if negated:
         return f"{word} absent from {post_name}"
     return f"{word} present in {post_name}"
@@ -280,10 +297,10 @@ def learns_a_pair_pattern() -> float:
     """A hand-built tree votes only when both posts contain the same word."""
 
     machine = HierarchicalTsetlinMachine(n_words=2, n_clauses=2, n_leaves=1, T=5, s=1.0, seed=1)
-    # Include "word 0 present" on one positive leaf in each post, class 1.
-    present = 0
-    machine.state[1, 0, 0, 0, present] = machine.include_threshold
-    machine.state[1, 0, 1, 0, present] = machine.include_threshold
+    # Include "word 0 present in both posts" on one leaf in each group, class 1.
+    for group in (0, 1):
+        machine.state[1, 0, group, 0, 0] = machine.include_threshold
+        machine.state[1, 0, group, 0, machine.n_words] = machine.include_threshold
     rows = np.array(
         [
             [1, 0, 1, 0],
