@@ -14,11 +14,11 @@ The script loads only `features_train.npz` and `features_val.npz`. It does not r
 
 `tmu` 0.7.1 did not install here: pip stopped with "Microsoft Visual C++ 14.0 or greater is required." `code/vanilla_tsetlin.py` is the vanilla machine used for the pilot. At s = 1.0, Type I never includes a literal and always reinforces Exclude on a false literal. Type II can include a literal that is false in the current example, including a negated literal. The pilot turns `boost_true_positive_feedback` off. The library default of 1 would include true literals even when s = 1.0.
 
-The first pilot wrote:
+The required run wrote:
 
 | File | What it is |
 | --- | --- |
-| `code/results/vanilla_pilot.json` | Validation accuracy 0.515, the confusion matrix, and the settings. |
+| `code/results/vanilla_pilot.json` | The saved model. The boost comparison is in `docs/datasets.md`. |
 | `code/results/vanilla_clauses.txt` | The included literals and two validation examples. |
 | `code/results/vanilla_state.npz` | The automaton states. |
 | `code/results/vanilla_status.json` | The same summary the backend can display. |
