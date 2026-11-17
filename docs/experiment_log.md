@@ -130,3 +130,40 @@ The guidance for that habit comes from Martin A. Schwartz, "The importance of st
 - What changed: the document split, the pair sampling, and the model were all seeded with 11 and then with 23, instead of 457. Everything else is the best setup: 300 topical words, full posts, 30,000 pairs, 800 clauses per class, T = 50, s = 1.0, boost 1, 8 epochs, shuffled pair order.
 - What happened: seed 11 reached validation 0.694 after one epoch and finished at 0.747 (check 0.755). Seed 23 predicted "same category" for every pair for seven epochs, with validation at 0.500, and then moved to 0.631 (check 0.618) in the eighth.
 - What we learned: the setup is sensitive to the seed. Some runs start learning at once and some sit on a constant answer for several epochs first, so a run stopped at 8 epochs can land anywhere between about 0.63 and 0.76. One seed is not enough to report. The final number should be the mean and range over several seeds, and the epoch count should be large enough for a late starter to catch up.
+
+### 2026-11-12 — Does the 0.759 setup reach that accuracy on this computer?
+
+- Question: the 0.759 row was measured on another copy of the posts. On this machine, with the real by-date archive and `run_best.bat`'s settings, what is the validation accuracy?
+- What changed: nothing in the learning rule. Full posts, 300 topical words, 30,000 training pairs, s = 1.0, boost 1, 800 clauses per class, T = 50, 8 epochs, seed 457. The official test pairs were built and not scored.
+- What happened: training accuracy finished at 0.744. Validation accuracy was 0.692. The validation confusion matrix was `[[826, 174], [443, 557]]`, so 83% of different-category pairs and 56% of same-category pairs were right. The first three epochs stayed at 0.500, then the training accuracy rose.
+- What we learned: the setup runs on this Windows machine and the full posts do contain the headers. It does raise validation well above the cleaned boost-off result of 0.500. It does not reproduce 0.759. The number for this computer is 0.692. The three choices still have to be stated: uncleaned posts, a vocabulary chosen with the training categories, and boost on, which lets a present word enter a firing clause even at s = 1.0.
+- Command: `python dataset/prepare_data.py --full-text --vocabulary topical --max-features 300 --train-pairs 30000 --val-pairs 2000 --test-pairs 2000`, then `python code/train_vanilla.py --data dataset/prepared/s457_f300_t30000_v2000_e2000_val0p2_fulltext_topical --boost 1 --clauses 800 --T 50 --epochs 8`.
+
+### 2026-11-17 — Which prepared folder do the saved models use, and what accuracy did more training reach?
+
+- Question: the 8-epoch run on this computer stopped at validation 0.692. If training continues on the same pairs, and a hierarchical readout is fit on those clauses, what should the dashboard show?
+- Dataset: `dataset/prepared/s457_f300_t30000_v2000_e2000_val0p2_fulltext_topical`. The other three prepared folders were not used for these saved models. The catalog is `docs/datasets.md`. Test pairs were not read.
+- What happened: `--continue-epochs` carried the same 800-clause machine through epoch 24. The best validation accuracy was 0.711 at epoch 23, with training accuracy 0.763 and confusion matrix `[[842, 158], [420, 580]]`. Epoch 24 fell to 0.703, and the saved state stayed at epoch 23. The hierarchical model then kept those clauses, learned a weight for each clause and a weight for a shared word from the training pairs, and reached training accuracy 0.837 and validation accuracy 0.781. Its confusion matrix is `[[783, 217], [221, 779]]`.
+- What we learned: the number for this computer is 0.711 for the vanilla machine and 0.781 for the hierarchical model. The earlier 0.692 is epoch 8 of the same run. The 0.759 figure remains the other machine's result.
+- Commands: `python code/train_vanilla.py --data dataset/prepared/s457_f300_t30000_v2000_e2000_val0p2_fulltext_topical --boost 1 --clauses 800 --T 50 --s 1.0 --continue-epochs 8`, then `python hierarchical/train_hierarchical.py`.
+
+### 2026-11-17 — What accuracy does the required s = 1.0 run reach?
+
+- Question: the brief asks for cleaned pairs, a vanilla machine at s = 1.0 with reasoning by elimination, and a hierarchical Tsetlin Machine. What do those two models score when boost stays off?
+- Dataset: `dataset/prepared/s457_f1000_t10000_v2000_e2000_val0p2`. Headers, footers, and quotes removed. 1,000 frequent words. 10,000 training pairs and 2,000 validation pairs. Test pairs were not read. The earlier 0.711 model was archived and is not this run.
+- What happened: vanilla, 200 clauses, T = 50, s = 1.0, boost 0, 10 epochs. Best validation accuracy 0.517 at epoch 2, training accuracy 0.511, confusion matrix `[[274, 726], [239, 761]]`. The hierarchical tree, 40 clauses, two groups, four leaves each, same s and boost, 8 epochs. Best validation accuracy 0.500 at epoch 1, confusion matrix `[[1000, 0], [1000, 0]]`.
+- What we learned: with boost off, Type I does not include a present word. Both models stay next to chance. That is the required measurement. The higher scores from the full-post, boost-on run are a different experiment.
+- Commands: `python code/train_vanilla.py --data dataset/prepared/s457_f1000_t10000_v2000_e2000_val0p2 --s 1.0 --boost 0 --clauses 200 --T 50 --epochs 10`, then `python hierarchical/train_hierarchical.py --data dataset/prepared/s457_f1000_t10000_v2000_e2000_val0p2 --clauses 40 --leaves 4 --T 50 --s 1.0 --epochs 8`.
+
+### 2026-11-17 — Do more epochs at s = 1.0 raise the required run?
+
+- Question: the required models sat at 0.517 and 0.500. If training continues with the same s, the same boost-off rule, and the same cleaned pairs, does validation rise?
+- What happened: the vanilla machine trained through epoch 30, starting again from the epoch-2 weights. Validation on epochs 11 to 30 stayed between 0.496 and 0.508. The saved model remained epoch 2, validation 0.517, training 0.511. The hierarchical tree trained through epoch 24. Its best validation accuracy was 0.501 at epoch 10, two same-category pairs correct and every different-category pair correct. Confusion matrix `[[1000, 0], [998, 2]]`.
+- What we learned: more epochs of this update do not move the result off chance. At s = 1.0 with boost off, a present word is not added to a clause, so the clauses stay almost empty.
+
+### 2026-11-17 — On the same cleaned pairs, what changes when boost is turned on?
+
+- Question: the report needs both settings. If only the boost flag changes, and the pairs, s = 1.0, clause counts, and T stay the same, how do the two accuracies compare?
+- Dataset: `dataset/prepared/s457_f1000_t10000_v2000_e2000_val0p2`. Test pairs were not read. The boost-off models were archived before this run.
+- What happened: vanilla, 200 clauses, T = 50, boost 1, 12 epochs. Best validation 0.521 at epoch 8, training 0.720, confusion matrix `[[534, 466], [491, 509]]`. Hierarchical tree, 40 clauses, 4 leaves per group, boost 1, 12 epochs. Best validation 0.529 at epoch 9, training 0.566, confusion matrix `[[775, 225], [717, 283]]`.
+- What we learned: boost on raises the training accuracy clearly and the validation accuracy only slightly. The report can put the two settings next to each other: boost off is 0.517 and 0.501, boost on is 0.521 and 0.529.
