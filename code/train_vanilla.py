@@ -242,6 +242,12 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="boost_true_positive_feedback. 0 is the report setting. 1 is the tmu/pyTsetlinMachine default.",
     )
+    parser.add_argument(
+        "--continue-epochs",
+        type=int,
+        default=0,
+        help="Train this many extra epochs from the saved model instead of starting over.",
+    )
     return parser.parse_args()
 
 
@@ -327,7 +333,7 @@ def main() -> None:
             },
             "saved_epoch": epoch,
             "epochs_finished": len(history),
-            "epochs_requested": args.epochs,
+            "epochs_requested": last_epoch,
             "run_complete": complete,
             "saved_model_is": "the epoch with the highest validation accuracy so far",
             "history": history,
@@ -369,16 +375,46 @@ def main() -> None:
         return val_accuracy
 
     RESULTS.mkdir(parents=True, exist_ok=True)
-    archived = archive_previous_results()
-    if archived is not None:
-        print(f"The previous saved model was moved to {archived}. Nothing was deleted.")
-
     history: list[dict] = []
     best_accuracy = -1.0
     best_epoch = 0
     best_state = machine.state.copy()
+    first_epoch = 1
+    last_epoch = args.epochs
+    if args.continue_epochs > 0:
+        pilot_path = RESULTS / "vanilla_pilot.json"
+        state_path = RESULTS / "vanilla_state.npz"
+        if not pilot_path.exists() or not state_path.exists():
+            raise SystemExit("No saved model to continue. Train once before using --continue-epochs.")
+        saved = json.loads(pilot_path.read_text(encoding="utf-8"))
+        if Path(saved["data_dir"]).resolve() != data_dir:
+            raise SystemExit("The saved model was trained on a different dataset.")
+        state = np.load(state_path)["state"]
+        if tuple(state.shape) != tuple(machine.state.shape):
+            raise SystemExit(
+                f"Saved state shape {state.shape} does not match this run {machine.state.shape}."
+            )
+        machine.state = state
+        history = list(saved.get("history") or [])
+        best_epoch = int(saved.get("saved_epoch") or len(history))
+        best_accuracy = float(saved["validation_accuracy"])
+        best_state = machine.state.copy()
+        last_finished = max((int(row["epoch"]) for row in history), default=best_epoch)
+        first_epoch = last_finished + 1
+        last_epoch = last_finished + args.continue_epochs
+        args.epochs = last_epoch
+        _update_history(history, complete=False)
+        print(
+            f"Continuing from the saved weights of epoch {best_epoch}, "
+            f"validation accuracy {best_accuracy:.3f}. "
+            f"Training epochs {first_epoch} to {last_epoch}."
+        )
+    else:
+        archived = archive_previous_results()
+        if archived is not None:
+            print(f"The previous saved model was moved to {archived}. Nothing was deleted.")
     try:
-        for epoch in range(1, args.epochs + 1):
+        for epoch in range(first_epoch, last_epoch + 1):
             machine.fit(x_train, y_train, epochs=1)
             train_now = accuracy(y_train, machine.predict(x_train))
             val_now = accuracy(y_val, machine.predict(x_val))
@@ -396,6 +432,29 @@ def main() -> None:
                 + ("  (saved)" if improved else ""),
                 flush=True,
             )
+            progress = {
+                "data_dir": str(data_dir),
+                "validation_accuracy": round(val_now, 3),
+                "train_accuracy": round(train_now, 3),
+                "epoch": epoch,
+                "epochs_planned": last_epoch,
+                "hyperparameters": {
+                    "clauses_per_class": args.clauses,
+                    "T": args.T,
+                    "s": args.s,
+                    "boost_true_positive_feedback": args.boost,
+                    "seed": args.seed,
+                },
+                "epoch_history": [
+                    {
+                        "epoch": row["epoch"],
+                        "train": round(row["train_accuracy"], 3),
+                        "validation": round(row["validation_accuracy"], 3),
+                    }
+                    for row in history
+                ],
+            }
+            (RESULTS / "vanilla_progress.json").write_text(json.dumps(progress, indent=2), encoding="utf-8")
     except KeyboardInterrupt:
         print("\nStopped by the keyboard. The best epoch so far is already saved.")
 
@@ -403,7 +462,7 @@ def main() -> None:
         raise SystemExit("No epoch finished, so no model was saved.")
     # Finish with the best epoch in memory, so the files and the printout describe the same model.
     machine.state = best_state
-    final_accuracy = save(best_epoch, history, complete=len(history) == args.epochs)
+    final_accuracy = save(best_epoch, history, complete=len(history) == last_epoch)
     summary = json.loads((RESULTS / "vanilla_pilot.json").read_text(encoding="utf-8"))
     print(f"Saved model: epoch {best_epoch} of {len(history)} finished")
     print(f"Pilot train accuracy {summary['train_accuracy']:.3f}")
@@ -415,6 +474,12 @@ def main() -> None:
     print((RESULTS / "vanilla_clauses.txt").read_text(encoding="utf-8")[:4000])
     print(f"Wrote {RESULTS / 'vanilla_pilot.json'}")
     print(f"Wrote {RESULTS / 'vanilla_clauses.txt'}")
+    try:
+        from accuracy_line import main as draw_accuracy_line
+
+        draw_accuracy_line()
+    except Exception as error:
+        print(f"Accuracy line was not drawn: {error}")
 
 
 if __name__ == "__main__":
