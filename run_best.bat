@@ -1,4 +1,5 @@
 @echo off
+rem Separate experiment, not the required run. It keeps headers and turns boost on.
 cd /d "%~dp0"
 if not exist ".venv\Scripts\python.exe" (
   echo The project environment is missing. Run these two commands first:
@@ -29,8 +30,8 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo Step 3 of 3. Drawing the automaton-state histogram.
-".venv\Scripts\python.exe" code\state_histogram.py
+echo Step 3 of 3. Drawing the accuracy line.
+".venv\Scripts\python.exe" code\accuracy_line.py
 
 echo.
 echo Done. Double-click start.bat, or refresh http://127.0.0.1:8000, to see the validation accuracy.
