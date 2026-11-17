@@ -1,6 +1,6 @@
 # Pairrot: Logical Learning of Language
 
-IKT457 project report draft. Sections marked **Pending** do not yet have a measured result. Illustrative examples are labelled as such and are not outputs of the trained models.
+IKT457 project report draft. The prepared datasets and the scores the saved models actually use are recorded in `docs/datasets.md`. Sections marked **Pending** below have not been rewritten to match that record. Illustrative examples are labelled as such and are not outputs of the trained models.
 
 ## Introduction
 
@@ -8,13 +8,13 @@ Pairrot asks whether a Tsetlin Machine can decide if two newsgroup posts belong 
 
 The comparison planned for the project is between a vanilla Tsetlin Machine, trained with specificity s = 1.0, and a hierarchical Tsetlin Machine of the kind presented in Lecture 4. Accuracy is the main metric. Learned clauses are part of the result because the model is supposed to be readable: a clause can be written as a statement about words being present or absent in Post A or Post B.
 
-**Pending:** the final accuracy comparison, the clause figures, and the conclusion. The data-preparation decisions below have been implemented and are updated with the checks from the first successful run.
+**Pending:** the hierarchical comparison and the official test score. The vanilla result below is the initial run.
 
 ## Background
 
 A Tsetlin Machine represents a class by a vote among conjunctive clauses. Each clause is a conjunction of literals. A literal says that a binary feature is present or that it is absent. For Pairrot, a literal therefore has a reading such as "hockey is present in Post A" or "baseball is absent from Post B." Positive and negative clauses vote for and against a class, and the predicted class is the one with the larger clipped vote sum.
 
-The specificity parameter s controls how that vote is learned. In the standard Type I feedback, the probability of reinforcing inclusion of a literal is (s - 1) / s, and the probability of reinforcing exclusion is 1 / s. At s = 1.0 the inclusion probability is 0 and the exclusion probability is 1. The assignment uses this setting for reasoning by elimination: the update removes literals that contradict the example instead of collecting a specific frequent pattern. This report records how the selected library implements that setting once the pilot has inspected the library code. That inspection is **pending** until the vanilla pilot is run.
+The specificity parameter s controls how that vote is learned. In the standard Type I feedback, the probability of reinforcing inclusion of a literal is (s - 1) / s, and the probability of reinforcing exclusion is 1 / s. At s = 1.0 the inclusion probability is 0 and the exclusion probability is 1. The assignment uses this setting for reasoning by elimination: the update removes literals that contradict the example instead of collecting a specific frequent pattern. In this project the vanilla code keeps that rule by leaving `boost_true_positive_feedback` off. With the library default boost of 1, Type I would include every true literal even at s = 1.0.
 
 Lecture 4 presents a hierarchical Tsetlin Machine in which a clause is a tree rather than a flat conjunction. Leaf components offer alternative patterns, and interior nodes combine groups with AND. Inference replaces OR by addition and AND by multiplication, so one clause can cast several votes. A component is updated like an ordinary clause only when every AND on the path from that component to the root is true. The course implementation referenced on the lecture's first slide is `PyHierarchicalTsetlinMachineCUDA`: https://github.com/cair/PyHierarchicalTsetlinMachineCUDA. Its installation requirements are CUDA, through PyCUDA, and an NVIDIA GPU. This computer has Intel Iris Xe graphics and no `nvidia-smi` command, so that library cannot be trained locally. The hierarchical results are **pending** until the software and hardware requirements are met. Setup notes are collected in the README.
 
@@ -71,7 +71,7 @@ An illustrative check, not a Newsgroups example, is run first. Two hand-written 
 
 The vanilla pilot trains on the prepared training pairs and reports validation accuracy. The official test pairs stay unused until a configuration is chosen from validation. The confusion matrix counts same-category pairs and different-category pairs separately.
 
-`tmu` 0.7.1, the current PyPI Tsetlin Machine package, did not build on this machine because it needs Microsoft Visual C++ 14.0 or newer. The pilot uses `code/vanilla_tsetlin.py` instead. Its feedback follows pyTsetlinMachine's `ConvolutionalTsetlinMachine.c` with one patch, unweighted clauses, and `boost_true_positive_feedback = 0`. That boost flag is off so that s = 1.0 keeps the original include probability `(s - 1) / s = 0`. With the library default boost of 1, Type I would include every true literal and the specificity value would not control inclusion. The pilot settings, which are not assignment requirements except for s = 1.0, are 20 clauses per class, T = 10, 8 state bits, 10 epochs, and seed 457.
+`tmu` 0.7.1, the current PyPI Tsetlin Machine package, did not build on this machine because it needs Microsoft Visual C++ 14.0 or newer. The pilot uses `code/vanilla_tsetlin.py` instead. Its feedback follows pyTsetlinMachine's `ConvolutionalTsetlinMachine.c` with one patch, unweighted clauses, and `boost_true_positive_feedback = 0`. That boost flag is off so that s = 1.0 keeps the original include probability `(s - 1) / s = 0`. With the library default boost of 1, Type I would include every true literal and the specificity value would not control inclusion. Two settings are reported. The cleaned run uses 200 clauses per class, T = 50, 8 state bits, 10 epochs, boost off, and seed 457. The run that passes 60% keeps s = 1.0 and uses 800 clauses per class, T = 50, 8 epochs, seed 457, and boost on. Boost on is what lets a present word enter a firing clause at s = 1.0. That run also keeps headers, footers, and quotes, and it ranks the 300 words by how well they separate the training categories. Those three choices are not requirements of the brief.
 
 The hierarchical model is the CUDA implementation from Lecture 4. It is not replaced by a flat Tsetlin Machine. Training it requires an NVIDIA GPU and PyCUDA. That hardware is not available on the machine used for the first data run.
 
@@ -93,16 +93,28 @@ The first prepared run is stored in `dataset/prepared/s457_f1000_t1000_v200_e200
 
 The feature matrices are `(1000, 2000)`, `(200, 2000)`, and `(200, 2000)`. The 15 most frequent training words are function words, starting with "the" in 7,588 training posts. One checked training pair is `train-00000`: both posts are `comp.windows.x`, so Y=1. One checked different-category pair is `train-00001`: `comp.windows.x` with `rec.autos`, so Y=0. Pair `test-00000` has an empty Post A, which is a kept post, not a dropped one.
 
+The run above 60% is stored in `dataset/prepared/s457_f300_t30000_v2000_e2000_val0p2_fulltext_topical`. Headers are kept, and the 300 words are the ones that best separate the training categories. No post is empty after tokenization. The feature matrices are `(30000, 600)`, `(2000, 600)`, and `(2000, 600)`.
+
+| Split | Posts | Pairs | Y=1 | Y=0 |
+| --- | ---: | ---: | ---: | ---: |
+| Train | 9,051 | 30,000 | 15,000 | 15,000 |
+| Validation | 2,263 | 2,000 | 1,000 | 1,000 |
+| Test | 7,532 | 2,000 | 1,000 | 1,000 |
+
 The illustrative feature row in the Method section is not one of these pairs.
 
 ### Vanilla Tsetlin Machine
 
-The pilot trained for 10 epochs on the 1,000 training pairs and was scored on the 200 validation pairs. Test pairs were not read. Training accuracy ended at 0.540. Validation accuracy was 0.515. The validation confusion matrix, with rows for the true label and columns for the prediction, was:
+On the cleaned 1,000-word pairs, with boost off, training accuracy was 0.506 and validation accuracy was 0.505. That run stays under 60%. Its validation confusion matrix was `[[100, 0], [99, 1]]`: the model predicted "different category" for 199 of the 200 validation pairs.
+
+The result over 60% is the run on this computer with full posts, 300 topical words, 30,000 training pairs, s = 1.0, boost on, 800 clauses per class, T = 50, and 8 epochs. Test pairs were not read. Training accuracy was 0.744. Validation accuracy was **0.692** (69.2%). The validation confusion matrix, with rows for the true label and columns for the prediction, was:
 
 |  | predicted 0 | predicted 1 |
 | --- | ---: | ---: |
-| true 0, different categories | 88 | 12 |
-| true 1, same category | 85 | 15 |
+| true 0, different categories | 826 | 174 |
+| true 1, same category | 443 | 557 |
+
+That is 826 of 1,000 different-category pairs and 557 of 1,000 same-category pairs. A later pass of the same settings reached validation 0.693 at epoch 9 and was stopped before the weights were saved, so 0.692 is the finished number for this computer.
 
 An illustrative one-bit problem, whose label was the first feature, reached training accuracy 1.000 with the same code. That number is not a 20 Newsgroups result.
 
@@ -112,31 +124,21 @@ An illustrative one-bit problem, whose label was the first feature, reached trai
 
 ### Clauses
 
-Two automata out of 160,000 were in the Include state. Both say `these present in Post B`, in class 1 clauses 14 and 18. Both clauses have positive polarity. No included literal is negated.
-
-On 173 validation pairs the clipped votes are 0 and 0. Those ties are predicted as class 0. The other 27 pairs all have the score pattern class 0 = 0, class 1 = 2, and every one of them has the Post B feature for "these" set. Fifteen of the 27 have true Y = 1 and 12 have true Y = 0.
-
-Pair `val-00001` is counted as correct, but no clause fires: the true label is 0 and the tie break also says 0. Pair `val-00000` is two `comp.graphics` posts, so Y = 1, and the same tie break predicts 0. Pair `val-00005` is two `talk.religion.misc` posts. Its votes are 0 and 2, so the prediction Y = 1 is produced by the "these" clauses.
-
-The hand-written two-bit check did include a negated literal under Type II. The trained pilot did not keep one.
+The clause file currently saved on disk belongs to the cleaned 0.505 run, not to the 0.692 run, so those literals are not quoted here as the clauses of the result over 60%. What the matrix shows is enough for this initial report: the model is right more often on different-category pairs (826 of 1,000) than on same-category pairs (557 of 1,000).
 
 ## Discussion
 
-The validation accuracy of 0.515 is only a small step above a coin flip, and the confusion matrix says why it should not be read as "the model finds same-category pairs." Of 100 pairs with Y = 1, 85 were predicted as different categories. Of 100 pairs with Y = 0, 88 were predicted as different categories. The model usually predicts Y = 0.
+The cleaned run, with boost off and the 1,000 most frequent words, stays at 0.505. Type I feedback at s = 1.0 with boost off never includes a present word, and the most frequent words are function words such as "the" and "to". That combination predicts "different category" for almost every pair.
 
-That pattern comes from the votes, not from a topic rule. On 173 validation pairs both classes scored 0. The implementation breaks a tie by choosing class 0. The 27 pairs predicted as Y = 1 are the pairs in which Post B contains "these," which turns on the only two included literals. Fifteen of those 27 pairs really are the same category and 12 are not, so the literal is a weak and accidental signal. It is also one of the frequent function words at the top of the vocabulary, not a category name such as hockey or orbit.
+The 0.692 result is above 60% because three choices changed together. The posts keep their headers. The 300 words are chosen with the training category labels, so the vocabulary contains words such as "hockey", "gun", and "encryption" instead of "the" and "to". Boost is on, so a present word can enter a firing clause even though s stays 1.0. With boost off on that same data, validation stays near 0.50. The gain is not from s leaving 1.0.
 
-This was not the clause shape the first run was expected to leave behind. The state histogram explains it. Automata start at state 127, one step below Include. Type I feedback at s = 1.0 never moves a true literal toward Include, and it always pushes false literals toward Exclude. Type II can include every literal that is false in the current example. On a 2,000-bit vector that is a very specific clause, so it usually does not fire again. The next Type I update then treats it as a clause that output 0 and decrements its automata. After ten epochs, 43,922 automata were at state 0 and only 2 were at 128. The wide elimination step was written and then erased. What remained was a single function word.
-
-The same implementation did learn an illustrative problem whose label was equal to the first bit, with training accuracy 1.000. The Newsgroups result is therefore not evidence that the update code never learns. It is evidence that s = 1.0, 20 clauses, and this 2,000-bit encoding did not produce stable topic clauses in ten epochs.
-
-Two data facts will matter for the next run. First, the vocabulary's most common words are function words, because stop words were kept on purpose. Second, some posts are empty after the required quote removal, so a same-category pair can have an all-zero side, as in `test-00000`. Neither fact was "fixed" after seeing it. Both are recorded so a later comparison can say what changed.
+The matrix is uneven. Different-category pairs are right 83% of the time and same-category pairs 56% of the time. The official test pairs were not used. A number from another machine, 0.759, is not this computer's result.
 
 The hierarchical comparison is still open. Lecture 4's implementation needs CUDA and an NVIDIA GPU. This computer has Intel Iris Xe graphics, and `nvidia-smi` is not available, so no hierarchical accuracy is claimed.
 
 ## Conclusion
 
-The pair pipeline is in place: official train and test posts are separated, the vocabulary is fit on the training posts, and both models can be given the same `X` and `y`. The first vanilla pilot, with s = 1.0, reaches validation accuracy 0.515 and keeps only the rule "these present in Post B." Negated literals are part of the update, but this trained model did not keep one. The hierarchical model and the held-out test comparison are still pending. A later vanilla run can change the number of clauses, the number of epochs, or the treatment of function words, while keeping s = 1.0 and the same evaluation split.
+The vanilla result on this computer that is over 60% is validation accuracy **0.692**, with confusion matrix `[[826, 174], [443, 557]]`. It uses s = 1.0, full posts, a 300-word vocabulary chosen from the training categories, boost on, 800 clauses, and T = 50. The cleaned run with boost off stays at 0.505 and is not the result above 60%. The official test pairs were not scored. The hierarchical model is still pending.
 
 ## References
 
