@@ -19,14 +19,20 @@ From the repository root:
 .\.venv\Scripts\python dataset\prepare_data.py
 ```
 
-The prepared files from the first verified run are in:
+Four prepared folders are on disk. The catalog, including which folder the saved models use, is in `docs/datasets.md`.
+
+The first verified run is:
 
 `dataset/prepared/s457_f1000_t1000_v200_e200_val0p2`
+
+`train.bat` and the saved models use the larger cleaned set:
+
+`dataset/prepared/s457_f1000_t10000_v2000_e2000_val0p2`
 
 | File | Role |
 | --- | --- |
 | `settings.json` | Counts, seeds, and the choices used for this run. |
-| `vocabulary.json` | The shared 1,000-word list. |
+| `vocabulary.json` | The shared word list. Both cleaned runs use 1,000 words. |
 | `documents.csv` | One row per post and which split it belongs to. |
 | `pairs_train.csv`, `pairs_val.csv`, `pairs_test.csv` | Document ids, categories, and Y. For inspection. |
 | `features_train.npz`, `features_val.npz`, `features_test.npz` | `X` and `y` only. This is what the model code loads. |
