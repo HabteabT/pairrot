@@ -3,15 +3,29 @@ let currentSplit = "train";
 
 function stageCard(stage) {
   const card = document.createElement("article");
-  card.className = `card ${stage.state}`;
+  card.className = `card ${stage.state} card-${stage.id}`;
   const title = document.createElement("h2");
   title.textContent = stage.title;
   const pill = document.createElement("p");
   pill.className = "pill";
   pill.textContent = stage.state;
+  card.append(title, pill);
+
+  const score = stage.detail.match(/(\d+\.\d+)\s+\(([^)]+)\)/);
+  if (stage.id === "vanilla" && score) {
+    const figure = document.createElement("p");
+    figure.className = "score";
+    figure.textContent = score[2];
+    const detail = document.createElement("p");
+    detail.className = "score-note";
+    detail.textContent = `Validation accuracy ${score[1]}`;
+    card.append(figure, detail);
+    return card;
+  }
+
   const detail = document.createElement("p");
   detail.textContent = stage.detail;
-  card.append(title, pill, detail);
+  card.append(detail);
   return card;
 }
 
@@ -87,7 +101,7 @@ function markSplit() {
 // that says how to make them instead of a broken-image icon.
 const FIGURES = [
   { id: "knows-when", src: "/knows_when.png", command: "python code/knows_when.py" },
-  { id: "state-histogram", src: "/state_histogram.png", command: "train.bat" },
+  { id: "accuracy-line", src: "/accuracy_line.png", command: "train.bat" },
 ];
 
 function refreshFigures() {
