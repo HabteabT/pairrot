@@ -225,6 +225,7 @@ venv/
 dataset/cache/
 dataset/prepared/
 code/results/
+hierarchical/results/
 data/
 outputs/
 _course_extract/
