@@ -187,3 +187,10 @@ The guidance for that habit comes from Martin A. Schwartz, "The importance of st
 - Dataset: the same full-post, 300-word topical pairs. s = 1.0, boost on, T = 50, seed 457. The vanilla model stayed frozen at 0.711. Test pairs were not read.
 - What happened: epochs 9 to 16 of the 200-clause machine scored 0.716, 0.714, 0.716, 0.717, 0.712, 0.715, 0.716, and 0.712. None beat epoch 8. A new 400-clause machine, 8 epochs, reached 0.723 at epoch 1 and then stayed between 0.706 and 0.717. The saved model remained epoch 8, training 0.737, validation 0.726, confusion matrix `[[641, 359], [189, 811]]`.
 - What we learned: this second level has levelled off just above the vanilla 0.711. More epochs and twice the clauses did not pass 0.726.
+
+### 2026-11-26 — Do more vanilla epochs raise 0.711, and does a new second level follow?
+
+- Question: the vanilla model was saved at epoch 23, validation 0.711. If training continues from those weights, does validation rise, and what does a second Tsetlin level score on the new clauses?
+- Dataset: the same full-post, 300-word topical pairs. s = 1.0, boost on, T = 50, seed 457. Test pairs were not read.
+- What happened: vanilla epochs 25 to 32. Epoch 26 reached 0.712, epoch 28 reached 0.714, and epoch 32 reached 0.720 with training accuracy 0.776 and confusion matrix `[[820, 180], [381, 619]]`. The exact saved validation is 0.7195. A new 200-clause second level on those clauses reached 0.712 at epoch 8, training 0.718, confusion matrix `[[660, 340], [237, 763]]`. Epochs 9 to 16 stayed between 0.699 and 0.706, so epoch 8 stayed saved.
+- What we learned: more vanilla epochs moved validation from 0.711 to 0.720. The second level trained on the new clauses did not pass the vanilla score. The earlier 0.726 second level belongs to the epoch-23 clauses and is archived.
