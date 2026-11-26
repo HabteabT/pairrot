@@ -65,8 +65,8 @@ The pair task is unchanged. s stays 1.0. Boost is on. Keeping the full posts and
 
 | Model | Training accuracy | Validation accuracy | Confusion matrix |
 | --- | ---: | ---: | --- |
-| Vanilla, epoch 23 of 24, 800 clauses | 0.763 | 0.711 | `[[842, 158], [420, 580]]` |
-| Second Tsetlin machine, epoch 8 of 8, 200 clauses | 0.737 | 0.726 | `[[641, 359], [189, 811]]` |
+| Vanilla, epoch 32 of 32, 800 clauses | 0.776 | 0.720 | `[[820, 180], [381, 619]]` |
+| Second Tsetlin machine, epoch 8 of 16, 200 clauses | 0.718 | 0.712 | `[[660, 340], [237, 763]]` |
 
 The second machine reads the vanilla clause outputs and one bit per word for that word being present in both posts. It is a Tsetlin update. It is not a weighted readout, and it is not the CUDA library. This computer has no NVIDIA GPU. Test pairs were not read.
 
