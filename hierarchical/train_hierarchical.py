@@ -233,7 +233,7 @@ def main() -> None:
             "T": args.T,
             "s": args.s,
             "boost_true_positive_feedback": args.boost,
-            "epochs": args.epochs,
+            "epochs": last_epoch,
             "seed": args.seed,
             "vanilla_clauses": int(vanilla.n_clauses),
             "shared_word_bits": x_train.shape[1] // 2,
