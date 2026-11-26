@@ -93,6 +93,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--boost", type=int, choices=(0, 1), default=1)
     parser.add_argument("--epochs", type=int, default=8)
     parser.add_argument("--seed", type=int, default=457)
+    parser.add_argument(
+        "--continue-epochs",
+        type=int,
+        default=0,
+        help="Train this many more epochs from the saved second-level weights.",
+    )
     return parser.parse_args()
 
 
