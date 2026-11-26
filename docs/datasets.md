@@ -149,7 +149,7 @@ Boost off does not add a present word to a clause. Both models stay next to chan
 
 The boost-off vanilla model is in `code/results/archive/20261117-224250_val0.517`. The boost-on cleaned vanilla model is in `code/results/archive/boost1_cleaned_val0.523`. The boost-off hierarchical model is in `hierarchical/results/archive/boost0_val0.501`. The boost-on cleaned hierarchical model is in `hierarchical/results/archive/boost1_cleaned_val0.529`.
 
-The dashboard shows the flexible run: vanilla 71.1% and the second Tsetlin level 72.6%.
+The dashboard shows the flexible run: vanilla 72.0% and the second Tsetlin level 71.2%. The earlier pair, vanilla 71.1% at epoch 23 and a second level at 72.6%, is archived. The 72.6% model read the epoch-23 clauses, so it is not the second level of the current vanilla model.
 
 ## Numbers that are not this computer's saved models
 
