@@ -140,8 +140,41 @@ def main() -> None:
     best_state = machine.state.copy()
     best_predictions = None
     best_train = 0.0
+    first_epoch = 1
+    last_epoch = args.epochs
+    if args.continue_epochs > 0:
+        saved_path = RESULTS / "hierarchical.json"
+        state_path = RESULTS / "hierarchical_state.npz"
+        if not saved_path.exists() or not state_path.exists():
+            raise SystemExit("No saved second-level model to continue.")
+        saved = json.loads(saved_path.read_text(encoding="utf-8"))
+        if Path(saved["data_dir"]).resolve() != data_dir:
+            raise SystemExit("The saved second-level model was trained on a different dataset.")
+        state = np.load(state_path)["state"]
+        if tuple(state.shape) != tuple(machine.state.shape):
+            raise SystemExit(
+                f"Saved state shape {state.shape} does not match this run {machine.state.shape}."
+            )
+        machine.state = state
+        progress_path = RESULTS / "hierarchical_progress.json"
+        if progress_path.exists():
+            stored = json.loads(progress_path.read_text(encoding="utf-8"))
+            history = list(stored.get("epoch_history") or [])
+        best_epoch = int(saved.get("best_epoch") or 1)
+        best_accuracy = float(saved["validation_accuracy"])
+        best_train = float(saved.get("train_accuracy") or 0.0)
+        best_state = machine.state.copy()
+        last_finished = max((int(row["epoch"]) for row in history), default=best_epoch)
+        first_epoch = last_finished + 1
+        last_epoch = last_finished + args.continue_epochs
+        print(
+            f"Continuing from the saved weights of epoch {best_epoch}, "
+            f"validation accuracy {best_accuracy:.3f}. "
+            f"Training epochs {first_epoch} to {last_epoch}.",
+            flush=True,
+        )
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(first_epoch, last_epoch + 1):
         machine.fit(upper_train, y_train, epochs=1)
         train_accuracy = float((machine.predict(upper_train) == y_train).mean())
         predictions = machine.predict(upper_val)
