@@ -180,3 +180,10 @@ The guidance for that habit comes from Martin A. Schwartz, "The importance of st
 - Dataset: `dataset/prepared/s457_f300_t30000_v2000_e2000_val0p2_fulltext_topical`. 300 topical words, 30,000 training pairs, 2,000 validation pairs. Test pairs were not read. The cleaned boost-on models were archived first.
 - What happened: the saved vanilla machine is epoch 23, training 0.763, validation 0.711, confusion matrix `[[842, 158], [420, 580]]`. A second Tsetlin machine was trained for 8 epochs on that machine's clause outputs plus 300 shared-word bits. Clauses 200, T = 50, s = 1.0, boost on. Best validation 0.726 at epoch 8, training 0.737, confusion matrix `[[641, 359], [189, 811]]`.
 - What we learned: the flexible choices lift validation from about 0.52 to 0.711, and the second Tsetlin level reaches 0.726. The earlier 0.781 figure was a weighted readout on the same clauses. It is not this saved model. The cleaned boost-off and boost-on numbers stay in `docs/datasets.md` for the report.
+
+### 2026-11-26 — Do more epochs, or twice as many second-level clauses, raise 0.726?
+
+- Question: the second Tsetlin level stopped at validation 0.726 on its last epoch. If training continues from those weights, or the second level is trained again with 400 clauses, does validation rise?
+- Dataset: the same full-post, 300-word topical pairs. s = 1.0, boost on, T = 50, seed 457. The vanilla model stayed frozen at 0.711. Test pairs were not read.
+- What happened: epochs 9 to 16 of the 200-clause machine scored 0.716, 0.714, 0.716, 0.717, 0.712, 0.715, 0.716, and 0.712. None beat epoch 8. A new 400-clause machine, 8 epochs, reached 0.723 at epoch 1 and then stayed between 0.706 and 0.717. The saved model remained epoch 8, training 0.737, validation 0.726, confusion matrix `[[641, 359], [189, 811]]`.
+- What we learned: this second level has levelled off just above the vanilla 0.711. More epochs and twice the clauses did not pass 0.726.
