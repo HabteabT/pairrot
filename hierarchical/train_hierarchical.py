@@ -244,14 +244,29 @@ def main() -> None:
         "Level 2 is a Tsetlin Machine trained on those clause outputs and on shared words.\n"
         f"s = 1.0, boost {args.boost}, best epoch {best_epoch}, validation {best_accuracy:.3f}.\n"
     )
+    saved_path = RESULTS / "hierarchical.json"
+    previous_accuracy = -1.0
+    if saved_path.exists():
+        previous = json.loads(saved_path.read_text(encoding="utf-8"))
+        if Path(previous.get("data_dir", "")).resolve() == data_dir:
+            previous_accuracy = float(previous.get("validation_accuracy", -1.0))
+    print(f"Best validation accuracy {best_accuracy:.3f} at epoch {best_epoch}")
+    print(f"Validation confusion matrix {matrix}")
+    if best_accuracy <= previous_accuracy + 1e-12:
+        progress["run_complete"] = True
+        progress["validation_accuracy"] = previous_accuracy
+        (RESULTS / "hierarchical_progress.json").write_text(json.dumps(progress, indent=2), encoding="utf-8")
+        print(
+            f"Kept the saved model at validation {previous_accuracy:.3f}. "
+            f"This run reached {best_accuracy:.3f}."
+        )
+        return
     (RESULTS / "hierarchical.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     (RESULTS / "hierarchical_clauses.txt").write_text(clause_text, encoding="utf-8")
     np.savez_compressed(RESULTS / "hierarchical_state.npz", state=best_state)
     progress["run_complete"] = True
     progress["validation_accuracy"] = best_accuracy
     (RESULTS / "hierarchical_progress.json").write_text(json.dumps(progress, indent=2), encoding="utf-8")
-    print(f"Best validation accuracy {best_accuracy:.3f} at epoch {best_epoch}")
-    print(f"Validation confusion matrix {matrix}")
     print(f"Wrote {RESULTS / 'hierarchical.json'}")
 
 
