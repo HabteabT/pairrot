@@ -160,7 +160,8 @@ The experiment log records other runs. They are not the files the dashboard load
 | 0.505 | First cleaned folder, boost off, archived |
 | 0.517 and 0.501 | Required cleaned pairs, boost off |
 | 0.523 and 0.529 | Same cleaned pairs, boost on |
-| 0.692 | Epoch 8 of the 300-word vanilla run, before training continued. The saved state is epoch 23, 0.711. |
-| 0.781 | An earlier weighted readout on the same clauses. It is not the saved hierarchical model. The saved second level is 0.726. |
+| 0.692 | Epoch 8 of the 300-word vanilla run, before training continued. The saved state is epoch 32, 0.720. |
+| 0.711 and 0.726 | Epoch 23 of the vanilla run, and the second level trained on those clauses. Archived when training continued to epoch 32. |
+| 0.781 | An earlier weighted readout on the epoch-23 clauses. It is not a saved Tsetlin model. |
 | 0.759 | The same flexible settings on another machine. It is not a result of this computer. |
 | Test accuracy | Not measured. The test pairs stay unread until the final comparison. |
