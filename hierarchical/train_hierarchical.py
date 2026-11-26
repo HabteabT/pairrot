@@ -199,6 +199,9 @@ def main() -> None:
         (RESULTS / "hierarchical_progress.json").write_text(json.dumps(progress, indent=2), encoding="utf-8")
 
     machine.state = best_state
+    if best_predictions is None:
+        best_predictions = machine.predict(upper_val)
+        best_train = float((machine.predict(upper_train) == y_train).mean())
     matrix = confusion_matrix(y_val, best_predictions)
     summary = {
         "stage": "hierarchical",
